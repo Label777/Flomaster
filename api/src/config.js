@@ -33,6 +33,7 @@
  * @property {TurnConfig} turn
  * @property {number} iceRatePerMin  Лимит запросов /api/ice на IP в минуту
  * @property {boolean} trustProxy    Брать IP клиента из X-Forwarded-For (за Caddy)
+ * @property {string[]} allowedOrigins  Origin'ы для CORS (сайт на GitHub Pages); пусто = CORS выключен
  * @property {import('./log.js').LogLevel} logLevel
  */
 
@@ -167,6 +168,10 @@ export function loadConfig(env) {
     },
     iceRatePerMin: intEnv(env.ICE_RATE_PER_MIN, 30, 'ICE_RATE_PER_MIN', { min: 1, max: 100000 }),
     trustProxy: (env.TRUST_PROXY ?? '1') !== '0',
+    allowedOrigins: (env.ALLOWED_ORIGINS ?? '')
+      .split(',')
+      .map((o) => o.trim().replace(/\/+$/, ''))
+      .filter((o) => o !== ''),
     logLevel: parseLevel(env.LOG_LEVEL),
   };
 }

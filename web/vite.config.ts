@@ -10,6 +10,8 @@ const isolationHeaders = {
 };
 
 export default defineConfig({
+  // Путь сайта: '/' на своём домене, '/<repo>/' на GitHub Pages (задаёт workflow pages.yml).
+  base: process.env.VITE_BASE ?? '/',
   build: {
     target: 'es2022',
     // .wasm и .pk3 никогда не встраиваются в base64 — только отдельными файлами.

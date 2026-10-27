@@ -29,6 +29,21 @@
 | `scripts/` | деплой одной командой, закрепление образов, steamcmd, проверки |
 | `docker-compose.yml` | caddy (`web`), `api`, `cs-server` (`yohimik/cs-web-server`), `coturn` |
 
+## Сайт на GitHub Pages
+
+Сайт можно бесплатно опубликовать на GitHub Pages: `https://<владелец>.github.io/<репозиторий>/`.
+
+1. Settings → Pages → Build and deployment → Source: **GitHub Actions**.
+2. Сделайте push в `main` — workflow `.github/workflows/pages.yml` соберёт и опубликует сайт (вкладка Actions).
+
+На Pages работает **офлайн-игра**. Игровой сервер на GitHub запустить нельзя: Pages раздаёт только статические файлы, а GitHub Actions не предназначены для постоянно работающих серверов. Для онлайна нужен VPS:
+
+1. Поднимите сервер по разделу «Деплой на VPS» ниже и добавьте в его `.env` строку `ALLOWED_ORIGINS=https://<владелец>.github.io`.
+2. В репозитории: Settings → Secrets and variables → Actions → Variables → `API_BASE` = `https://<домен-вашего-VPS>`.
+3. Перезапустите workflow `pages` — в «Серверах» и лаунчере появится ваш сервер.
+
+На Pages нельзя задать заголовки COOP/COEP, поэтому их добавляет service worker (`web/public/coi-sw.js`); при самом первом заходе страница один раз перезагрузится.
+
 ## Деплой на VPS
 
 Нужно: Linux VPS с публичным IPv4, Docker Engine 24+ с плагином Compose v2, домен с A-записью на IP сервера.

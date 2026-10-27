@@ -1,5 +1,6 @@
 /** Типизированные запросы к нашему API (контракт — ARCHITECTURE.md §6). */
 import { log } from '../ui/log';
+import { API_DISABLED, apiUrl } from './endpoints';
 
 export type ServerStatus = 'online' | 'offline' | 'unknown';
 
@@ -35,9 +36,10 @@ export const FALLBACK_ICE: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:193
 export class ApiError extends Error {}
 
 async function getJson(path: string, signal?: AbortSignal): Promise<unknown> {
+  if (API_DISABLED) throw new ApiError('Онлайн-серверы к этой версии сайта не подключены. Доступна офлайн-игра.');
   let res: Response;
   try {
-    res = await fetch(path, { headers: { Accept: 'application/json' }, cache: 'no-store', signal });
+    res = await fetch(apiUrl(path), { headers: { Accept: 'application/json' }, cache: 'no-store', signal });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
     throw new ApiError('Нет связи с сайтом. Проверьте подключение к интернету.');
@@ -111,7 +113,8 @@ export async function measurePing(samples = 3): Promise<number | null> {
   for (let i = 0; i < samples; i++) {
     const t0 = performance.now();
     try {
-      const res = await fetch('/api/health', { cache: 'no-store' });
+      if (API_DISABLED) return null;
+      const res = await fetch(apiUrl('/api/health'), { cache: 'no-store' });
       if (!res.ok) continue;
       await res.arrayBuffer();
       times.push(performance.now() - t0);

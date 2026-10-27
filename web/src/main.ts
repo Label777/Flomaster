@@ -10,6 +10,9 @@ import { renderLicenses } from './pages/licenses';
 import { renderUnsupported } from './pages/unsupported';
 import { renderNotFound } from './pages/notfound';
 import { isEngineStarted } from './game/session';
+import { ensureCrossOriginIsolation } from './coi';
+
+ensureCrossOriginIsolation();
 
 const PAGES: Record<string, PageRender> = {
   home: renderHome,

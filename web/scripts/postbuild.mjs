@@ -81,4 +81,6 @@ if (!(await exists(distDir))) {
   process.exit(1);
 }
 await copyLegal();
-await compressAll();
+// GitHub Pages сжимает сам и не отдаёт .br/.gz — там сжатие выключают (POSTBUILD_NO_COMPRESS=1).
+if (process.env.POSTBUILD_NO_COMPRESS === '1') console.log('postbuild: сжатие пропущено (POSTBUILD_NO_COMPRESS=1)');
+else await compressAll();

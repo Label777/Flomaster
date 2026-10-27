@@ -56,6 +56,8 @@ services:
       TURN_PORT: ${TURN_PORT:-3478}
       TURN_SECRET: ${TURN_SECRET:?задайте TURN_SECRET в .env}
       TURN_TTL: ${TURN_TTL:-86400}
+      # Origin сайта на GitHub Pages, которому разрешён доступ к API (CORS), через запятую
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       RCON_PASSWORD: ${RCON_PASSWORD:-}
     expose:
       - "8080"

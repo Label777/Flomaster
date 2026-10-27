@@ -1,10 +1,11 @@
 import { h } from '../ui/dom';
 import { renderShell } from '../ui/shell';
 import type { Route } from '../router';
+import { assetUrl } from '../net/endpoints';
 
 const DOCS: readonly { url: string; title: string }[] = [
-  { url: '/LICENSE.txt', title: 'Лицензия сайта' },
-  { url: '/THIRD_PARTY_NOTICES.txt', title: 'Сторонние компоненты' },
+  { url: assetUrl('LICENSE.txt'), title: 'Лицензия сайта' },
+  { url: assetUrl('THIRD_PARTY_NOTICES.txt'), title: 'Сторонние компоненты' },
 ];
 
 export function renderLicenses(root: HTMLElement, route: Route): () => void {
@@ -18,7 +19,7 @@ export function renderLicenses(root: HTMLElement, route: Route): () => void {
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        pre.textContent = `Файл ${doc.url} не найден в этой сборке.`;
+        pre.textContent = `Файл ${doc.title} не найден в этой сборке.`;
       });
     return h('section', { class: 'license' }, h('h2', { text: doc.title }), pre);
   });
