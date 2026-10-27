@@ -17,6 +17,9 @@ export interface Validation {
   hasCstrike: boolean;
 }
 
+/** Имена карт, которые можно безопасно передать в `map <имя>`. */
+const SAFE_MAP_NAME = /^[A-Za-z0-9_.+-]{1,64}$/;
+
 export function validateGamePaths(paths: Iterable<string>): Validation {
   let valveLiblist = false;
   let cstrikeLiblist = false;
@@ -34,7 +37,9 @@ export function validateGamePaths(paths: Iterable<string>): Validation {
     else if (/^valve\/[^/]+\.wad$/.test(lower)) wadCount++;
     else if (/^cstrike\/maps\/[^/]+\.bsp$/.test(lower)) {
       const file = path.slice('cstrike/maps/'.length);
-      maps.add(file.slice(0, -'.bsp'.length));
+      const name = file.slice(0, -'.bsp'.length);
+      // Имя идёт в консольную команду `map <имя>`: пробелы, кавычки и `;` её ломают.
+      if (SAFE_MAP_NAME.test(name)) maps.add(name);
     }
   }
 
