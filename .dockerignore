@@ -1,0 +1,15 @@
+# Контекст сборки образов (web собирается с контекстом = корень репозитория).
+.git
+**/node_modules
+**/dist
+data
+.env
+.env.*
+!.env.example
+*.zip
+
+# Отрендеренные конфиги с секретами — в образы не попадают
+deploy/cs-server/server.cfg
+deploy/coturn/turnserver.conf
+**/*.tmp
+**/*.log

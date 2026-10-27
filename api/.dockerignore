@@ -1,0 +1,6 @@
+node_modules
+test
+jsconfig.json
+*.log
+.env
+.env.*

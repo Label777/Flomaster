@@ -1,0 +1,15 @@
+{
+  "//": "Только для проверки типов в редакторе / tsc (нужен @types/node). Сборки нет: код запускается как есть.",
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "checkJs": true,
+    "allowJs": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.js", "test/**/*.js"]
+}

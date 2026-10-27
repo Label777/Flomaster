@@ -1,0 +1,17 @@
+{
+  "name": "cs16-web-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Статус игровых серверов (A2S / Xash3D info / RCON) и временные TURN-учётки для сайта CS 1.6 в браузере",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/config.js && node --check src/a2s.js && node --check src/turn.js && node --check src/status.js && node --check src/log.js",
+    "test": "node --test"
+  }
+}

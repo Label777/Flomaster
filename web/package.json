@@ -1,0 +1,26 @@
+{
+  "name": "cs16-web-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Сайт и браузерный клиент Counter-Strike 1.6 (Xash3D FWGS в WebAssembly)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && node scripts/postbuild.mjs",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "cs16-client": "0.1.2",
+    "jszip": "3.10.1",
+    "xash3d-fwgs": "1.2.2"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite": "7.1.11"
+  }
+}

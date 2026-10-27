@@ -1,0 +1,36 @@
+# Секреты и локальные данные
+.env
+.env.*
+!.env.example
+data/
+
+# Сгенерированные конфиги (рендерятся из шаблонов при деплое)
+deploy/cs-server/server.cfg
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+npm-debug.log*
+
+# Файлы игры Valve — НИКОГДА не коммитим
+valve/
+cstrike/
+valve.zip
+*.bsp
+*.wad
+*.mdl
+*.spr
+*.pak
+*.gcf
+*.res
+*.wav
+*.mp3
+
+# Прочее
+.DS_Store
+Thumbs.db
+
+# Сгенерированный конфиг coturn (содержит TURN_SECRET) и резервные копии .env
+deploy/coturn/turnserver.conf
+*.tmp.*
