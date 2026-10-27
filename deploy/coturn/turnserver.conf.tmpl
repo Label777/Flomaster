@@ -31,9 +31,14 @@ no-cli
 # Ретрансляция TCP (RFC 6062) браузерам не нужна
 no-tcp-relay
 
-# Защита от использования TURN как прокси во внутренние сети.
-# Пиры на loopback (127.x, ::1) запрещены по умолчанию (опция allow-loopback-peers
-# не задана; устаревшую no-loopback-peers не используем) и дополнительно ниже.
+# TURN — только до нашего игрового сервера, а не открытый ретранслятор.
+# Учётки из /api/ice получает любой посетитель сайта, поэтому пиром разрешён ЕДИНСТВЕННЫЙ
+# адрес — PUBLIC_IP (allowed-peer-ip ниже). Всё остальное IPv4/IPv6 запрещено: по документации
+# coturn адрес, попавший и в allowed, и в denied, считается разрешённым.
+denied-peer-ip=0.0.0.0-255.255.255.255
+denied-peer-ip=::-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+# Ниже — явные запреты внутренних сетей (избыточны при запрете всего, оставлены на случай,
+# если строку выше уберут). Loopback запрещён и по умолчанию (allow-loopback-peers не задан).
 no-multicast-peers
 denied-peer-ip=0.0.0.0-0.255.255.255
 denied-peer-ip=10.0.0.0-10.255.255.255
@@ -54,7 +59,8 @@ denied-peer-ip=2001::-2001:1ff:ffff:ffff:ffff:ffff:ffff:ffff
 denied-peer-ip=2002::-2002:ffff:ffff:ffff:ffff:ffff:ffff:ffff
 denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
 denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
-# Собственный публичный IP разрешён явно: через него relay доходит до WebRTC игрового сервера
+# Единственный разрешённый пир — собственный публичный IP: через него relay доходит до WebRTC
+# игрового сервера (GAME_PORT). Второй игровой сервер на другом IP — добавьте его сюда.
 allowed-peer-ip=${PUBLIC_IP}
 
 # Квоты: одновременных allocation на пользователя и всего
