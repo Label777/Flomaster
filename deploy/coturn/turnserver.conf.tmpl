@@ -1,0 +1,70 @@
+# Шаблон конфигурации coturn (TURN/STUN для WebRTC).
+# scripts/deploy.sh подставляет значения из .env и пишет deploy/coturn/turnserver.conf
+# (файл не коммитится: в нём общий секрет). Контейнер работает в network_mode: host.
+# Используются только опции coturn 4.6.
+
+# Порт STUN/TURN (UDP и TCP)
+listening-port=${TURN_PORT}
+
+# Публичный IPv4 сервера — его coturn сообщает клиентам в relay-кандидатах
+external-ip=${PUBLIC_IP}
+
+# Диапазон портов ретрансляции (UDP), должен быть открыт в файрволе
+min-port=${TURN_MIN_PORT}
+max-port=${TURN_MAX_PORT}
+
+# Временные учётки по схеме TURN REST API: их выдаёт api (/api/ice),
+# подписывая HMAC-SHA1 этим же секретом
+use-auth-secret
+static-auth-secret=${TURN_SECRET}
+realm=${DOMAIN}
+stale-nonce=600
+
+# Атрибут FINGERPRINT в сообщениях (нужен WebRTC)
+fingerprint
+
+# Без TLS/DTLS-листенеров (turns: не используем), без telnet-консоли
+no-tls
+no-dtls
+no-cli
+
+# Ретрансляция TCP (RFC 6062) браузерам не нужна
+no-tcp-relay
+
+# Защита от использования TURN как прокси во внутренние сети.
+# Пиры на loopback (127.x, ::1) запрещены по умолчанию (опция allow-loopback-peers
+# не задана; устаревшую no-loopback-peers не используем) и дополнительно ниже.
+no-multicast-peers
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.0.0.0-192.0.0.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=198.18.0.0-198.19.255.255
+denied-peer-ip=240.0.0.0-255.255.255.255
+# IPv6: loopback, IPv4-mapped, NAT64, discard, Teredo, 6to4, ULA, link-local
+denied-peer-ip=::1
+denied-peer-ip=::ffff:0.0.0.0-::ffff:255.255.255.255
+denied-peer-ip=64:ff9b::-64:ff9b::ffff:ffff
+denied-peer-ip=100::-100::ffff:ffff:ffff:ffff
+denied-peer-ip=2001::-2001:1ff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=2002::-2002:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+# Собственный публичный IP разрешён явно: через него relay доходит до WebRTC игрового сервера
+allowed-peer-ip=${PUBLIC_IP}
+
+# Квоты: одновременных allocation на пользователя и всего
+user-quota=12
+total-quota=1200
+
+# Журнал в stdout (docker logs), без даты в имени файла
+log-file=stdout
+simple-log
+
+# coturn в образе работает от непривилегированного пользователя — pid-файл туда,
+# где есть права на запись
+pidfile=/tmp/turnserver.pid

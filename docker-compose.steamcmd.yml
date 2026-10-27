@@ -1,0 +1,28 @@
+# EXPERIMENTAL. Оверлей: игровой сервер использует файлы HLDS, установленные администратором
+# через steamcmd (scripts/install-server-files.sh → ./data/hlds), вместо файлов из образа.
+#
+#   scripts/install-server-files.sh
+#   docker compose -f docker-compose.yml -f docker-compose.steamcmd.yml up -d
+#
+# Внимание:
+#  - Каталоги монтируются ЦЕЛИКОМ поверх /xashds/valve и /xashds/cstrike и СКРЫВАЮТ всё, что
+#    образ yohimik/cs-web-server положил туда сам (например, его серверные библиотеки или
+#    конфиги). Если сервер после этого не стартует — уберите оверлей и запустите без него.
+#    Совместимость с образом не проверена.
+#  - server.cfg и mapcycle.txt по-прежнему монтируются из deploy/cs-server/ поверх этих каталогов.
+#  - Файлы остаются только на сервере; в /xashds/public ничего не монтируется, браузерам
+#    файлы Valve не раздаются.
+
+services:
+  cs-server:
+    volumes:
+      - type: bind
+        source: ./data/hlds/valve
+        target: /xashds/valve
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./data/hlds/cstrike
+        target: /xashds/cstrike
+        bind:
+          create_host_path: false

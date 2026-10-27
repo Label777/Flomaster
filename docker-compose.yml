@@ -1,0 +1,125 @@
+# CS 1.6 в браузере — стек для одной VPS.
+# Запуск: scripts/deploy.sh (проверяет .env, рендерит конфиги из шаблонов, собирает и поднимает).
+# Значения берутся из .env (см. .env.example). Наружу публикуются только порты web (80/443),
+# игрового сервера (GAME_PORT) и coturn (host network); api и HTTP cs-server (27016) — только
+# во внутренней сети docker.
+
+name: cs16-web
+
+x-defaults: &defaults
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  # Caddy: статика сайта, HTTPS, прокси /api → api и сигналинга → cs-server.
+  # Образ собирается из web/Dockerfile (статика в /srv, Caddyfile из deploy/caddy/Caddyfile).
+  web:
+    <<: *defaults
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
+        CADDY_IMAGE: ${CADDY_IMAGE:-caddy:2.11-alpine}
+    environment:
+      DOMAIN: ${DOMAIN:?задайте DOMAIN в .env}
+      ACME_EMAIL: ${ACME_EMAIL:?задайте ACME_EMAIL в .env}
+      CS_SIGNAL_PATH: ${CS_SIGNAL_PATH:-/websocket}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+  # API: /api/servers, /api/servers/:id, /api/ice, /api/health. Наружу не публикуется.
+  api:
+    <<: *defaults
+    build:
+      context: ./api
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
+    environment:
+      SERVER_NAME: ${SERVER_NAME:-CS 1.6 Web}
+      GAME_PORT: ${GAME_PORT:-27018}
+      GAME_QUERY_PORT: ${GAME_QUERY_PORT:-}
+      MAX_PLAYERS: ${MAX_PLAYERS:-16}
+      CS_SIGNAL_PATH: ${CS_SIGNAL_PATH:-/websocket}
+      DOMAIN: ${DOMAIN:?задайте DOMAIN в .env}
+      TURN_PORT: ${TURN_PORT:-3478}
+      TURN_SECRET: ${TURN_SECRET:?задайте TURN_SECRET в .env}
+      TURN_TTL: ${TURN_TTL:-3600}
+      RCON_PASSWORD: ${RCON_PASSWORD:-}
+    expose:
+      - "8080"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # Игровой сервер + WebRTC-сигналинг (yohimik/cs-web-server).
+  # HTTP :27016 (веб-клиент upstream, сигналинг, админ-панель) НЕ публикуется: Caddy
+  # пропускает к нему только путь сигналинга. valve.zip в /xashds/public НЕ монтируется —
+  # мы не раздаём файлы Valve.
+  cs-server:
+    <<: *defaults
+    image: ${CS_SERVER_IMAGE:?задайте CS_SERVER_IMAGE в .env}
+    platform: linux/386
+    command:
+      - "+map ${START_MAP:-de_dust2}"
+      - "+maxplayers ${MAX_PLAYERS:-16}"
+    environment:
+      IP: ${PUBLIC_IP:?задайте PUBLIC_IP в .env}
+      PORT: ${GAME_PORT:-27018}
+      ADDR: ":27016"
+      LOG_FORMAT: json
+      DISABLE_X_POWERED_BY: "true"
+      ADMIN_PANEL_USER: ${ADMIN_PANEL_USER:-}
+      ADMIN_PANEL_PASSWORD: ${ADMIN_PANEL_PASSWORD:-}
+    volumes:
+      # server.cfg рендерится scripts/deploy.sh из server.cfg.tmpl (create_host_path: false —
+      # без рендера запуск упадёт с понятной ошибкой, а не создаст каталог server.cfg)
+      - type: bind
+        source: ./deploy/cs-server/server.cfg
+        target: /xashds/cstrike/server.cfg
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./deploy/cs-server/mapcycle.txt
+        target: /xashds/cstrike/mapcycle.txt
+        read_only: true
+        bind:
+          create_host_path: false
+    expose:
+      - "27016"
+    ports:
+      - "${GAME_PORT:-27018}:${GAME_PORT:-27018}/udp"
+      - "${GAME_PORT:-27018}:${GAME_PORT:-27018}/tcp"
+
+  # TURN/STUN. host network: relay-порты (TURN_MIN_PORT–TURN_MAX_PORT) и TURN_PORT
+  # слушаются прямо на хосте, без NAT docker.
+  coturn:
+    <<: *defaults
+    image: ${COTURN_IMAGE:?задайте COTURN_IMAGE в .env}
+    network_mode: host
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+    volumes:
+      - type: bind
+        source: ./deploy/coturn/turnserver.conf
+        target: /etc/coturn/turnserver.conf
+        read_only: true
+        bind:
+          create_host_path: false
+
+volumes:
+  caddy_data:
+  caddy_config:

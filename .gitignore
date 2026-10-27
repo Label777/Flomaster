@@ -30,3 +30,7 @@ valve.zip
 # Прочее
 .DS_Store
 Thumbs.db
+
+# Сгенерированный конфиг coturn (содержит TURN_SECRET) и резервные копии .env
+deploy/coturn/turnserver.conf
+*.tmp.*

@@ -1,0 +1,92 @@
+# Caddy: статика сайта, HTTPS (Let's Encrypt), прокси /api и WebSocket-сигналинга.
+#
+# Переменные окружения подставляются при запуске контейнера (docker-compose.yml → сервис web):
+#   DOMAIN          — домен сайта (адрес сайта ниже, сертификат Let's Encrypt)
+#   ACME_EMAIL      — почта для Let's Encrypt
+#   CS_SIGNAL_PATH  — путь сигналинга внутри cs-server (по умолчанию /websocket)
+#
+# Порядок директив: Caddy сортирует директивы внутри блока по фиксированному порядку
+# (header → … → handle → respond → reverse_proxy → file_server). Поэтому развилки
+# сделаны только вложенными handle-блоками: handle взаимоисключающие и проверяются
+# в порядке записи, а голый respond рядом с reverse_proxy сработал бы раньше прокси.
+
+{
+	email {$ACME_EMAIL}
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+{$DOMAIN} {
+	# Журнал запросов — JSON в stdout (docker logs).
+	log {
+		output stdout
+		format json
+	}
+
+	# Заголовки для всех ответов, включая проксированные. Из-за удаления (-Server)
+	# Caddy применяет этот блок в момент записи ответа, т.е. поверх заголовков upstream.
+	# COOP + COEP дают cross-origin isolation (SharedArrayBuffer); все ресурсы сайта
+	# с того же origin, поэтому require-corp ничего не ломает.
+	header {
+		Cross-Origin-Opener-Policy same-origin
+		Cross-Origin-Embedder-Policy require-corp
+		Cross-Origin-Resource-Policy same-origin
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+		-X-Powered-By
+	}
+
+	# Типы для движка. defer — заголовок ставится при записи ответа, после file_server,
+	# поэтому определение типа по расширению/содержимому его не перекрывает.
+	@wasm path *.wasm
+	header @wasm {
+		Content-Type application/wasm
+		defer
+	}
+
+	@pk3 path *.pk3
+	header @pk3 {
+		Content-Type application/octet-stream
+		defer
+	}
+
+	# Хэшированные имена Vite — кэш на год.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	@html path / /index.html
+	header @html Cache-Control no-cache
+
+	# API статуса серверов и TURN-учёток (контейнер api, наружу не публикуется).
+	handle /api/* {
+		encode zstd gzip
+		reverse_proxy api:8080
+	}
+
+	# Сигналинг игрового сервера: /rtc/main<CS_SIGNAL_PATH> → cs-server:27016<CS_SIGNAL_PATH>.
+	# handle_path срезает префикс /rtc/main. Наружу пропускается ТОЛЬКО путь сигналинга —
+	# остальной HTTP upstream-образа (его веб-клиент, админ-панель, valve.zip) недоступен.
+	# WebSocket (Upgrade) Caddy проксирует автоматически; заголовок Host передаётся как есть,
+	# поэтому проверка Origin на стороне upstream видит тот же хост.
+	handle_path /rtc/main/* {
+		handle {$CS_SIGNAL_PATH:/websocket} {
+			reverse_proxy cs-server:27016
+		}
+		handle {
+			respond 404
+		}
+	}
+
+	# Статика сайта. .br/.gz рядом с файлами генерируются при сборке web/.
+	# Сжатия «на лету» здесь нет намеренно: wasm-файлы большие, и сжимать их
+	# на каждый запрос дорого — нужные копии уже лежат рядом.
+	handle {
+		root * /srv
+		file_server {
+			precompressed br gzip
+		}
+	}
+}
