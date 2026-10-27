@@ -214,7 +214,7 @@ function mountGame(root: HTMLElement, plan: LaunchPlan): () => void {
     if (ask && !confirm('Выйти из игры? Файлы игры придётся выбрать заново.')) return;
     leaving = true;
     transport?.close();
-    location.hash = '#/';
+    location.hash = '#/g/cs16';
     location.reload();
   }
 

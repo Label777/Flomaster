@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>Реакция</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #141813;
+        --text: #dfe3d4;
+        --muted: #a1ab94;
+        --accent: #f0a53a;
+        --bad: #ef7a63;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        overflow: hidden;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+      }
+      .hud {
+        position: fixed;
+        top: 12px;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: center;
+        gap: 28px;
+        font: 600 1.2rem/1 'Bahnschrift', 'Arial Narrow', sans-serif;
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+      }
+      .hud b {
+        color: var(--accent);
+      }
+      .screen {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(20, 24, 19, 0.88);
+        text-align: center;
+        padding: 24px;
+      }
+      .screen[hidden] {
+        display: none;
+      }
+      .screen h1 {
+        margin: 0 0 8px;
+        font: 600 clamp(2rem, 6vw, 3.4rem)/1 'Bahnschrift', 'Arial Narrow', sans-serif;
+      }
+      .screen p {
+        margin: 0 0 18px;
+        color: var(--muted);
+        max-width: 42ch;
+      }
+      button {
+        min-height: 52px;
+        padding: 10px 30px;
+        border: 0;
+        border-radius: 3px;
+        background: var(--accent);
+        color: #1d1503;
+        font: 650 1.2rem/1 system-ui, sans-serif;
+        cursor: pointer;
+      }
+      button:focus-visible {
+        outline: 2px solid var(--text);
+        outline-offset: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div class="hud" aria-live="off">
+      <span>Время <b id="time">30.0</b></span>
+      <span>Очки <b id="score">0</b></span>
+      <span>Точность <b id="acc">—</b></span>
+    </div>
+    <div class="screen" id="screen">
+      <div>
+        <h1 id="title">Реакция</h1>
+        <p id="text">За 30 секунд попадите в как можно больше мишеней. Мишени сжимаются — чем быстрее попадание, тем больше очков.</p>
+        <button id="start" type="button">Начать</button>
+      </div>
+    </div>
+    <script>
+      // Демо-игра каталога: без зависимостей и внешних ресурсов (сайт cross-origin isolated).
+      (() => {
+        const ROUND_MS = 30000;
+        const LIFE_MS = 1400;
+        const BEST_KEY = 'reflex-best';
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d');
+        const $ = (id) => document.getElementById(id);
+        const ui = { time: $('time'), score: $('score'), acc: $('acc'), screen: $('screen'), title: $('title'), text: $('text'), start: $('start') };
+
+        let dpr = 1;
+        let targets = [];
+        let score = 0;
+        let hits = 0;
+        let shots = 0;
+        let endAt = 0;
+        let nextSpawn = 0;
+        let running = false;
+        let sparks = [];
+
+        const readBest = () => {
+          try {
+            return Number(localStorage.getItem(BEST_KEY)) || 0;
+          } catch {
+            return 0;
+          }
+        };
+        const writeBest = (v) => {
+          try {
+            localStorage.setItem(BEST_KEY, String(v));
+          } catch {
+            /* хранилище недоступно — рекорд не сохраняется */
+          }
+        };
+
+        function resize() {
+          dpr = Math.min(window.devicePixelRatio || 1, 2);
+          canvas.width = Math.round(innerWidth * dpr);
+          canvas.height = Math.round(innerHeight * dpr);
+        }
+
+        function spawn(now) {
+          const r = Math.max(22, Math.min(innerWidth, innerHeight) * 0.06) * dpr;
+          const pad = r + 50 * dpr;
+          targets.push({
+            x: pad + Math.random() * (canvas.width - pad * 2),
+            y: pad + Math.random() * (canvas.height - pad * 2),
+            r,
+            born: now,
+          });
+        }
+
+        function start() {
+          targets = [];
+          sparks = [];
+          score = hits = shots = 0;
+          const now = performance.now();
+          endAt = now + ROUND_MS;
+          nextSpawn = now;
+          running = true;
+          ui.screen.hidden = true;
+          updateHud(now);
+        }
+
+        function finish() {
+          running = false;
+          const best = readBest();
+          const record = score > best;
+          if (record) writeBest(score);
+          const acc = shots ? Math.round((hits / shots) * 100) : 0;
+          ui.title.textContent = record ? `Рекорд: ${score}!` : `Очки: ${score}`;
+          ui.text.textContent = `Попаданий: ${hits}, точность ${acc}%. Лучший результат: ${Math.max(best, score)}.`;
+          ui.start.textContent = 'Ещё раз';
+          ui.screen.hidden = false;
+          ui.start.focus();
+        }
+
+        function updateHud(now) {
+          ui.time.textContent = Math.max(0, (endAt - now) / 1000).toFixed(1);
+          ui.score.textContent = String(score);
+          ui.acc.textContent = shots ? `${Math.round((hits / shots) * 100)}%` : '—';
+        }
+
+        canvas.addEventListener('pointerdown', (ev) => {
+          if (!running) return;
+          ev.preventDefault();
+          const x = ev.clientX * dpr;
+          const y = ev.clientY * dpr;
+          const now = performance.now();
+          shots++;
+          for (let i = targets.length - 1; i >= 0; i--) {
+            const t = targets[i];
+            const k = 1 - (now - t.born) / LIFE_MS;
+            const r = t.r * Math.max(k, 0);
+            if ((x - t.x) ** 2 + (y - t.y) ** 2 <= r * r) {
+              hits++;
+              score += 10 + Math.round(k * 40);
+              sparks.push({ x: t.x, y: t.y, born: now });
+              targets.splice(i, 1);
+              break;
+            }
+          }
+        });
+
+        function frame(now) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          if (running) {
+            if (now >= endAt) finish();
+            else {
+              if (now >= nextSpawn) {
+                spawn(now);
+                const progress = 1 - (endAt - now) / ROUND_MS;
+                nextSpawn = now + 650 - progress * 300;
+              }
+              targets = targets.filter((t) => now - t.born < LIFE_MS);
+              updateHud(now);
+            }
+          }
+          for (const t of targets) {
+            const k = 1 - (now - t.born) / LIFE_MS;
+            const r = t.r * Math.max(k, 0);
+            ctx.lineWidth = 3 * dpr;
+            ctx.strokeStyle = '#dfe3d4';
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, r * 0.55, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = '#f0a53a';
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, Math.max(r * 0.2, 2 * dpr), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          sparks = sparks.filter((s) => now - s.born < 300);
+          for (const s of sparks) {
+            const p = (now - s.born) / 300;
+            ctx.strokeStyle = `rgba(240,165,58,${1 - p})`;
+            ctx.lineWidth = 2 * dpr;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, (20 + p * 40) * dpr, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          requestAnimationFrame(frame);
+        }
+
+        ui.start.addEventListener('click', start);
+        addEventListener('resize', resize);
+        resize();
+        const best = readBest();
+        if (best) ui.text.textContent += ` Ваш рекорд: ${best}.`;
+        requestAnimationFrame(frame);
+      })();
+    </script>
+  </body>
+</html>
