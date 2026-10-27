@@ -6,8 +6,8 @@ const HERO_MARK = `<svg viewBox="0 0 200 200" class="hero-mark" aria-hidden="tru
   <circle cx="100" cy="100" r="92" fill="none" stroke="currentColor" stroke-width="1" opacity=".35"/>
   <circle cx="100" cy="100" r="64" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".6"/>
   <circle cx="100" cy="100" r="34" fill="none" stroke="currentColor" stroke-width="2"/>
-  <g stroke="currentColor" stroke-width="3" stroke-linecap="square">
-    <path d="M100 18v52M100 130v52M18 100h52M130 100h52"/>
+  <g class="spread" stroke="var(--text)" stroke-width="3" stroke-linecap="square">
+    <path d="M100 18v52"/><path d="M100 130v52"/><path d="M18 100h52"/><path d="M130 100h52"/>
   </g>
   <g stroke="currentColor" stroke-width="1" opacity=".5">
     <path d="M100 8v6M100 186v6M8 100h6M186 100h6"/>

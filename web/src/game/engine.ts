@@ -156,7 +156,7 @@ export function bindCanvasSize(canvas: HTMLCanvasElement, resolution: EngineOpti
     canvas.width = resolution.width;
     canvas.height = resolution.height;
     canvas.dataset.fit = 'contain';
-    canvas.style.aspectRatio = `${resolution.width} / ${resolution.height}`;
+    canvas.style.setProperty('--ar', `${resolution.width} / ${resolution.height}`);
     return () => {};
   }
   const apply = (): void => {
