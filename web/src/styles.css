@@ -1117,6 +1117,7 @@ body.in-game {
   gap: 20px;
 }
 .game-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -1125,24 +1126,105 @@ body.in-game {
   overflow: hidden;
   background: var(--panel);
   color: var(--text);
-  text-decoration: none;
-  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 160ms ease, border-color 140ms ease, box-shadow 160ms ease;
+}
+.game-card::before {
+  /* блик, бегущий за курсором */
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(240px circle at var(--gx, 50%) var(--gy, 0%), rgba(255, 255, 255, 0.09), transparent 60%);
+  transition: opacity 160ms ease;
 }
 .game-card:hover {
-  color: var(--text);
   border-color: var(--line-strong);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4);
 }
-.game-card:focus-visible {
+.game-card:hover::before {
+  opacity: 1;
+}
+.game-card:has(:focus-visible) {
+  box-shadow: var(--focus);
+}
+.stretched {
+  color: inherit;
+  text-decoration: none;
+}
+.stretched::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+.stretched:hover {
+  color: inherit;
+}
+.stretched:focus-visible {
+  outline: none;
+}
+.fav-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  background: rgba(10, 12, 9, 0.55);
+  backdrop-filter: blur(4px);
+  color: var(--text);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.fav-btn[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.fav-btn:hover {
+  background: rgba(10, 12, 9, 0.8);
+}
+.fav-btn:focus-visible {
   outline: none;
   box-shadow: var(--focus);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .game-card:hover {
-    transform: translateY(-3px);
-  }
   .game-card:hover .cover-glyph {
     transform: scale(1.06) rotate(-4deg);
+  }
+  .game-card {
+    animation: card-in 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: calc(var(--i, 0) * 50ms);
+  }
+  .fav-btn.pop {
+    animation: pop 320ms ease;
+  }
+  .page {
+    animation: page-in 260ms ease both;
+  }
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+}
+@keyframes pop {
+  40% {
+    transform: scale(1.35);
+  }
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
   }
 }
 .game-card.is-soon {
@@ -1313,4 +1395,184 @@ body.is-player {
   width: 100%;
   border: 0;
   background: #000;
+}
+
+/* ---------- каталог: поиск, панель, «Продолжить» ---------- */
+
+.catalog-hero {
+  position: relative;
+  isolation: isolate;
+}
+.hero-glow {
+  position: absolute;
+  inset: -40px 0 auto auto;
+  width: min(520px, 70vw);
+  aspect-ratio: 1;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(240, 165, 58, 0.16), transparent);
+  filter: blur(10px);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-glow {
+    animation: glow 9s ease-in-out infinite alternate;
+  }
+}
+@keyframes glow {
+  to {
+    translate: -60px 30px;
+    scale: 1.15;
+  }
+}
+.search-wrap {
+  position: relative;
+  flex: 0 1 320px;
+  display: flex;
+  min-width: 0;
+  width: 100%;
+}
+.search-wrap .catalog-search {
+  flex: 1;
+  padding-right: 40px;
+}
+.search-kbd {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  translate: 0 -50%;
+  padding: 1px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--muted);
+  font: 500 0.8rem/1.4 var(--font-code);
+  pointer-events: none;
+}
+.search-wrap:focus-within .search-kbd {
+  opacity: 0;
+}
+.chip-fav[aria-pressed='true'] {
+  color: var(--accent);
+}
+.catalog-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+.catalog-bar .catalog-count {
+  margin: 0;
+}
+.catalog-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sort-select {
+  width: auto;
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 0.9rem;
+}
+.dice-btn:hover {
+  border-color: var(--accent);
+}
+.recent {
+  margin-bottom: 24px;
+}
+.recent[hidden] {
+  display: none;
+}
+.recent-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.recent-head h2 {
+  margin: 0 0 10px;
+  font-size: 1.2rem;
+}
+.recent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 4px;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.recent-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+}
+.recent-item:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.recent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.game-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -4px;
+}
+.game-quick .btn[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ---------- уведомления ---------- */
+
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  translate: -50% 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  padding: 10px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel-raised);
+  color: var(--text);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-size: 0.95rem;
+  transition: opacity 250ms ease, translate 250ms ease;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .toast {
+    animation: toast-in 220ms ease both;
+  }
+}
+.toast.is-leaving {
+  opacity: 0;
+  translate: 0 8px;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
 }
