@@ -94,9 +94,14 @@ export class WebRTCTransport implements SendtoSender {
 
       const ws = new WebSocket(signalSocketUrl(signalUrl));
       this.ws = ws;
-      ws.onerror = () => fail('Не удалось связаться с сервером сигналинга.');
+      // Если answer уже получен, сигналинг больше не нужен: сервер вправе закрыть WebSocket
+      // сразу после ответа. Тогда исход решают ICE (failed) и общий таймаут, а не закрытие сокета.
+      const answered = (): boolean => pc.remoteDescription !== null;
+      ws.onerror = () => {
+        if (!answered()) fail('Не удалось связаться с сервером сигналинга.');
+      };
       ws.onclose = () => {
-        if (!settled) fail('Сервер сигналинга закрыл соединение до установки связи.');
+        if (!settled && !answered()) fail('Сервер сигналинга закрыл соединение до установки связи.');
       };
       ws.onmessage = (ev: MessageEvent<unknown>) => {
         const msg = parseSignal(ev.data);
