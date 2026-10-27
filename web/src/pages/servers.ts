@@ -106,7 +106,8 @@ function renderRows(tbody: HTMLElement, servers: ServerInfo[], ping: number | nu
   tbody.replaceChildren(
     ...servers.map((s) => {
       const players = s.players === null ? NO_DATA : `${s.players}${s.maxPlayers !== null ? ` / ${s.maxPlayers}` : ''}`;
-      const online = s.status === 'online';
+      // «unknown» — сервер мог не ответить на A2S, но работать; играть разрешаем, кроме явного offline.
+      const online = s.status !== 'offline';
       const action =
         online && canPlay
           ? h('a', { class: 'btn btn-primary btn-small', attrs: { href: `#/play?server=${encodeURIComponent(s.id)}`, 'aria-label': `Играть на сервере ${s.name}` }, text: 'Играть' })

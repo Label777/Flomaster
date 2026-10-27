@@ -24,7 +24,7 @@ export function renderHome(root: HTMLElement, route: Route): void {
       h(
         'div',
         { class: 'hero-text' },
-        h('h1', { class: 'hero-title', text: 'Counter-Strike 1.6 прямо в браузере' }),
+        h('h1', { class: 'hero-title', text: 'Counter\u2011Strike 1.6 прямо в браузере' }),
         h(
           'p',
           { class: 'hero-lead' },

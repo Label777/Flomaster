@@ -301,8 +301,9 @@ code {
   font-size: clamp(2.6rem, 1.4rem + 5vw, 5.25rem);
   line-height: 0.95;
   letter-spacing: -0.01em;
-  max-width: 12ch;
+  max-width: 13ch;
   margin-bottom: 0.35em;
+  text-wrap: balance;
 }
 .hero-lead {
   font-size: 1.2rem;
@@ -661,7 +662,7 @@ code {
   padding: 0;
   border: 0;
 }
-.field > label,
+.field > label:not(.choice),
 .field legend {
   font-weight: 600;
   padding: 0;
@@ -1028,5 +1029,8 @@ body.in-game {
   .server-table .action {
     text-align: left;
     padding-top: 8px;
+  }
+  .server-table .action:has(.muted) {
+    display: none;
   }
 }

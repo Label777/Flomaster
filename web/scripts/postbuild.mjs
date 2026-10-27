@@ -65,11 +65,12 @@ async function compressAll() {
       },
     });
     const gz = gzipSync(data, { level: 9 });
-    await writeFile(`${path}.br`, br);
-    await writeFile(`${path}.gz`, gz);
+    // Несжимаемое (уже сжатое) не дублируем: Caddy отдаст оригинал.
+    if (br.length < size) await writeFile(`${path}.br`, br);
+    if (gz.length < size) await writeFile(`${path}.gz`, gz);
     count++;
     before += size;
-    afterBr += br.length;
+    afterBr += Math.min(br.length, size);
   }
   const mb = (n) => (n / 1048576).toFixed(1);
   log(`сжато файлов: ${count}, ${mb(before)} МБ → ${mb(afterBr)} МБ (br)`);
