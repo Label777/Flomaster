@@ -107,6 +107,8 @@ KEEP=1 scripts/verify-upstream.sh                 # не удалять клон
 | 34 | **Сборка `web` в этой среде не выполнялась** (нет `node_modules`). Типы проверены по заглушкам, повторяющим `.d.ts` `xash3d-fwgs@1.2.2`; `postbuild.mjs` проверен на имитации `dist/`. Пути экспорта `cs16-client` (`cl_dlls/…`, `dlls/cs_emscripten_wasm32.wasm`, `extras.pk3`) не проверены на настоящем пакете | первый `npm run build` в CI покажет, разрешаются ли импорты `?url` (`web/src/game/engine.ts:8-15`) |
 | 35 | **GPL-исходники движка.** Сайт раздаёт wasm движка Xash3D FWGS (GPL-3.0-or-later по вторичным источникам) | до запуска выполнить чек-лист §4 в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): точные коммиты и своя копия исходников |
 | 36 | **Лицензия Half-Life SDK запрещает коммерческое использование** кода, производного от SDK (`cs16-client`, части движка) | сайт и доступ к серверу — только бесплатно (THIRD_PARTY_NOTICES §5) |
+| 37 | **GitHub Pages: только статика.** Игровой сервер, API и TURN на GitHub не запускаются | на Pages — офлайн-игра; для онлайна — VPS, переменная репозитория `API_BASE` и `ALLOWED_ORIGINS` на VPS (README, «Сайт на GitHub Pages») |
+| 38 | **GitHub Pages: нет своих заголовков** (COOP/COEP, `Cache-Control`, `application/wasm` задаёт сам Pages) | COOP/COEP добавляет `web/public/coi-sw.js` (сборка с `VITE_COI_SW=1`); первый заход — одна перезагрузка. В Firefox в приватном режиме service worker недоступен — страница работает без изоляции |
 
 ---
 

@@ -79,3 +79,9 @@ describe('loadConfig', () => {
     assert.ok(!s.includes('rconsecret'));
   });
 });
+
+it('ALLOWED_ORIGINS разбирается в список без хвостовых слэшей', () => {
+  const c = loadConfig({ ALLOWED_ORIGINS: 'https://label777.github.io/, https://example.org' });
+  assert.deepEqual(c.allowedOrigins, ['https://label777.github.io', 'https://example.org']);
+  assert.deepEqual(loadConfig({}).allowedOrigins, []);
+});

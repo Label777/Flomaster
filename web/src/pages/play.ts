@@ -18,6 +18,7 @@ import {
 } from '../game/settings';
 import { setLaunchPlan } from '../game/session';
 import { fetchServers, type ServerInfo } from '../net/api';
+import { API_DISABLED } from '../net/endpoints';
 import { detectSupport } from '../ui/support';
 import { navigate, type Route } from '../router';
 
@@ -31,7 +32,9 @@ const RESOLUTION_LABEL: Record<Resolution, string> = {
 };
 
 export function renderPlay(root: HTMLElement, route: Route): () => void {
-  const support = detectSupport();
+  const detected = detectSupport();
+  // Без API (сайт на GitHub Pages без игрового сервера) онлайн-режим недоступен.
+  const support = { ...detected, online: detected.online && !API_DISABLED };
   const settings = loadSettings();
   const preselect = route.params.get('server');
   if (preselect) {
@@ -81,7 +84,14 @@ export function renderPlay(root: HTMLElement, route: Route): () => void {
     h('legend', { text: 'Режим' }),
     radio('mode', 'offline', 'Офлайн-карта', settings.mode === 'offline'),
     radio('mode', 'online', 'Подключиться к серверу', settings.mode === 'online', !support.online),
-    support.online ? null : h('p', { class: 'field-hint', text: 'Онлайн недоступен: браузер не поддерживает WebRTC.' }),
+    support.online
+      ? null
+      : h('p', {
+          class: 'field-hint',
+          text: API_DISABLED
+            ? 'Онлайн недоступен: к этой версии сайта не подключён игровой сервер.'
+            : 'Онлайн недоступен: браузер не поддерживает WebRTC.',
+        }),
   );
 
   const mapSelect = h('select', { attrs: { id: 'f-map' } });

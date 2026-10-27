@@ -100,6 +100,22 @@ export function createHandler({ config, poller, limiter, log }) {
       });
     });
 
+    // CORS для сайта на другом origin (GitHub Pages): только origin'ы из ALLOWED_ORIGINS.
+    const origin = req.headers.origin;
+    if (typeof origin === 'string' && config.allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      if (method === 'OPTIONS') {
+        res.writeHead(204, {
+          'Access-Control-Allow-Methods': 'GET, HEAD',
+          'Access-Control-Allow-Headers': 'Accept',
+          'Access-Control-Max-Age': '600',
+        });
+        res.end();
+        return;
+      }
+    }
+
     try {
       if (method !== 'GET' && method !== 'HEAD') {
         send(res, 405, { error: 'method_not_allowed' }, false, { Allow: 'GET, HEAD' });

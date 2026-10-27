@@ -13,14 +13,16 @@ import {
   type SignalMessage,
 } from './protocol';
 import { log } from '../ui/log';
+import { apiOrigin } from './endpoints';
 
 export type TransportState = 'idle' | 'connecting' | 'open' | 'closed' | 'failed';
 
-/** Адрес WebSocket сигналинга на том же origin: wss: на https, ws: на http. */
+/** Адрес WebSocket сигналинга на хосте API (обычно тот же origin): wss: на https, ws: на http. */
 export function signalSocketUrl(signalUrl: string): string {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const origin = apiOrigin();
+  const proto = origin.protocol === 'https:' ? 'wss:' : 'ws:';
   const path = signalUrl.startsWith('/') ? signalUrl : `/${signalUrl}`;
-  return `${proto}//${location.host}${path}`;
+  return `${proto}//${origin.host}${path}`;
 }
 
 export class WebRTCTransport implements SendtoSender {
