@@ -10,6 +10,8 @@ import { findGame, playHref, type GameEntry } from '../catalog/games';
 import { assetUrl } from '../net/endpoints';
 import { renderNotFound } from './notfound';
 import { navigate, type Route } from '../router';
+import { isFavorite, markPlayed, toggleFavorite } from '../ui/prefs';
+import { shareLink, toast } from '../ui/toast';
 
 export function renderCatalogGame(root: HTMLElement, route: Route): (() => void) | void {
   const [id = '', sub] = route.segments;
@@ -38,8 +40,32 @@ function renderDetails(root: HTMLElement, route: Route, game: GameEntry): void {
           rel: external ? 'noopener noreferrer' : null,
         },
         text: external ? 'Играть ↗' : 'Играть',
+        on: { click: () => markPlayed(game.id) },
       })
     : h('span', { class: 'btn btn-xl', attrs: { 'aria-disabled': 'true' }, text: 'Скоро' });
+
+  const favBtn = h('button', {
+    class: 'btn btn-small',
+    attrs: { type: 'button' },
+    on: {
+      click: () => {
+        const on = toggleFavorite(game.id);
+        paintFav(on);
+        toast(on ? 'Добавлено в избранное' : 'Убрано из избранного');
+      },
+    },
+  });
+  const paintFav = (on: boolean): void => {
+    favBtn.textContent = on ? '★ В избранном' : '☆ В избранное';
+    favBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  };
+  paintFav(isFavorite(game.id));
+  const shareBtn = h('button', {
+    class: 'btn btn-small',
+    attrs: { type: 'button' },
+    text: '🔗 Поделиться',
+    on: { click: () => void shareLink(game.title) },
+  });
 
   const meta = h(
     'dl',
@@ -69,6 +95,7 @@ function renderDetails(root: HTMLElement, route: Route, game: GameEntry): void {
         { class: 'game-page-body' },
         h('h1', { text: game.title }),
         h('p', { class: 'hero-lead', text: game.tagline }),
+        h('div', { class: 'game-quick' }, favBtn, shareBtn),
         h(
           'div',
           { class: 'hero-actions' },
@@ -92,6 +119,7 @@ function renderPlayer(root: HTMLElement, game: GameEntry): (() => void) | void {
     return;
   }
   const src = /^https?:\/\//i.test(game.launch.src) ? game.launch.src : assetUrl(game.launch.src);
+  markPlayed(game.id);
 
   const frame = h('iframe', {
     class: 'player-frame',
@@ -117,6 +145,20 @@ function renderPlayer(root: HTMLElement, game: GameEntry): (() => void) | void {
     { class: 'player-bar' },
     h('a', { class: 'btn btn-small', attrs: { href: `#/g/${encodeURIComponent(game.id)}` }, text: '← К игре' }),
     h('span', { class: 'player-title', text: game.title }),
+    h('button', {
+      class: 'btn btn-small',
+      attrs: { type: 'button', title: 'Начать заново' },
+      text: '↻ Заново',
+      on: {
+        click: () => {
+          frame.src = 'about:blank';
+          requestAnimationFrame(() => {
+            frame.src = src;
+            frame.focus();
+          });
+        },
+      },
+    }),
     h('button', { class: 'btn btn-small', attrs: { type: 'button' }, text: 'Во весь экран', on: { click: fullscreen } }),
   );
 
