@@ -12,6 +12,7 @@ import { renderNotFound } from './notfound';
 import { navigate, type Route } from '../router';
 import { isFavorite, markPlayed, toggleFavorite } from '../ui/prefs';
 import { shareLink, toast } from '../ui/toast';
+import { exitFullscreen, toggleFullscreen } from '../ui/fullscreen';
 
 export function renderCatalogGame(root: HTMLElement, route: Route): (() => void) | void {
   const [id = '', sub] = route.segments;
@@ -121,24 +122,21 @@ function renderPlayer(root: HTMLElement, game: GameEntry): (() => void) | void {
   const src = /^https?:\/\//i.test(game.launch.src) ? game.launch.src : assetUrl(game.launch.src);
   markPlayed(game.id);
 
-  const frame = h('iframe', {
-    class: 'player-frame',
-    attrs: {
-      src,
-      title: game.title,
-      allow: 'fullscreen; pointer-lock; gamepad; autoplay',
-      allowfullscreen: true,
-      // Сайт cross-origin isolated (COEP): чужой фрейм без своих заголовков грузится в режиме credentialless.
-      credentialless: true,
-      referrerpolicy: 'no-referrer',
-    },
-  });
-
-  const fullscreen = (): void => {
-    const el = document.documentElement;
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void el.requestFullscreen?.().catch(() => undefined);
-  };
+  // Новый <iframe> вместо смены src: смена src добавляет записи в историю, и «Назад» застревает в плеере.
+  const makeFrame = (): HTMLIFrameElement =>
+    h('iframe', {
+      class: 'player-frame',
+      attrs: {
+        src,
+        title: game.title,
+        allow: 'fullscreen; pointer-lock; gamepad; autoplay',
+        allowfullscreen: true,
+        // Сайт cross-origin isolated (COEP): чужой фрейм без своих заголовков грузится в режиме credentialless.
+        credentialless: true,
+        referrerpolicy: 'no-referrer',
+      },
+    });
+  let frame = makeFrame();
 
   const bar = h(
     'div',
@@ -151,22 +149,22 @@ function renderPlayer(root: HTMLElement, game: GameEntry): (() => void) | void {
       text: '↻ Заново',
       on: {
         click: () => {
-          frame.src = 'about:blank';
-          requestAnimationFrame(() => {
-            frame.src = src;
-            frame.focus();
-          });
+          const next = makeFrame();
+          frame.replaceWith(next);
+          frame = next;
+          frame.focus();
         },
       },
     }),
-    h('button', { class: 'btn btn-small', attrs: { type: 'button' }, text: 'Во весь экран', on: { click: fullscreen } }),
+    h('button', { class: 'btn btn-small', attrs: { type: 'button' }, text: 'Во весь экран', on: { click: () => void toggleFullscreen(player) } }),
   );
 
+  const player = h('div', { class: 'player' }, bar, frame);
   document.body.classList.add('is-player');
-  root.replaceChildren(h('div', { class: 'player' }, bar, frame));
+  root.replaceChildren(player);
   frame.focus();
   return () => {
     document.body.classList.remove('is-player');
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    void exitFullscreen();
   };
 }

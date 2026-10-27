@@ -4,6 +4,7 @@ import { errorMessage, formatTime } from '../ui/format';
 import { fetchServers, measurePing, type ServerInfo, type ServerStatus } from '../net/api';
 import { detectSupport } from '../ui/support';
 import type { Route } from '../router';
+import { API_DISABLED } from '../net/endpoints';
 
 const REFRESH_MS = 10_000;
 const NO_DATA = 'нет данных';
@@ -14,7 +15,8 @@ const STATUS_LABEL: Record<ServerStatus, string> = {
   unknown: 'Неизвестно',
 };
 
-export function renderServers(root: HTMLElement, route: Route): () => void {
+export function renderServers(root: HTMLElement, route: Route): (() => void) | void {
+  if (API_DISABLED) return renderNoServers(root, route);
   const canPlay = detectSupport().online;
   const tbody = h('tbody');
   const status = h('p', { class: 'muted', attrs: { role: 'status', 'aria-live': 'polite' }, text: 'Загрузка списка…' });
@@ -124,4 +126,18 @@ function renderRows(tbody: HTMLElement, servers: ServerInfo[], ping: number | nu
       );
     }),
   );
+}
+
+/** Сборка без API (например, GitHub Pages без VPS): опрашивать нечего. */
+function renderNoServers(root: HTMLElement, route: Route): void {
+  renderShell(root, route.name, [
+    h(
+      'section',
+      { class: 'prose' },
+      h('h1', { text: 'Серверы' }),
+      h('p', { class: 'lead', text: 'К этой версии сайта игровой сервер не подключён.' }),
+      h('p', { text: 'Counter-Strike 1.6 можно запустить офлайн на любой карте из вашей папки игры, а HTML5-игры каталога работают без сервера.' }),
+      h('p', null, h('a', { class: 'btn btn-primary', attrs: { href: '#/g/cs16' }, text: 'К Counter-Strike 1.6' }), ' ', h('a', { class: 'btn', attrs: { href: '#/' }, text: 'В каталог' })),
+    ),
+  ]);
 }

@@ -1,5 +1,6 @@
 /** #/game — полноэкранный canvas, движок, панель управления, обработка обрыва связи. */
 import { Net } from 'xash3d-fwgs';
+import { toggleFullscreen } from '../ui/fullscreen';
 import { h } from '../ui/dom';
 import { legalFooter } from '../ui/shell';
 import { errorMessage, formatMB } from '../ui/format';
@@ -153,21 +154,6 @@ function mountGame(root: HTMLElement, plan: LaunchPlan): () => void {
     if (locked) consoleInput.blur();
   };
   document.addEventListener('pointerlockchange', onPointerLock);
-
-  async function toggleFullscreen(): Promise<void> {
-    // Safari до 16.4 знает только webkit-префиксные версии Fullscreen API.
-    const doc = document as Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => void };
-    const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
-    try {
-      if (document.fullscreenElement ?? doc.webkitFullscreenElement) {
-        if (typeof document.exitFullscreen === 'function') await document.exitFullscreen();
-        else doc.webkitExitFullscreen?.();
-      } else if (typeof el.requestFullscreen === 'function') await el.requestFullscreen();
-      else el.webkitRequestFullscreen?.();
-    } catch (err) {
-      log.warn('fullscreen', err);
-    }
-  }
 
   function toggleConsole(btn: HTMLButtonElement): void {
     consoleForm.hidden = !consoleForm.hidden;
