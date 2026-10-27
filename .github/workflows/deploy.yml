@@ -1,0 +1,66 @@
+name: Deploy
+
+# Ручной деплой на VPS: ssh → git pull --ff-only → scripts/deploy.sh.
+# Секреты репозитория:
+#   VPS_HOST     адрес VPS (можно host:port не указывать — порт задаётся VPS_PORT)
+#   VPS_USER     пользователь (с правами на docker)
+#   VPS_SSH_KEY  приватный ключ (OpenSSH), публичный — в ~/.ssh/authorized_keys на VPS
+# Переменные репозитория (Settings → Variables), необязательные:
+#   DEPLOY_DIR   каталог клона на VPS (по умолчанию ~/cs16-web)
+#   VPS_PORT     порт ssh (по умолчанию 22)
+# .env на VPS создаётся и заполняется вручную один раз; в CI его нет.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pin:
+        description: Закрепить образы по digest (deploy.sh --pin)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '~/cs16-web' }}
+      PIN_FLAG: ${{ inputs.pin && '--pin' || '' }}
+    steps:
+      - name: SSH-ключ и known_hosts
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY" || {
+            echo "Задайте секреты VPS_HOST, VPS_USER, VPS_SSH_KEY" >&2; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts || { echo "ssh-keyscan не получил ключ хоста $VPS_HOST" >&2; exit 1; }
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Деплой
+        run: |
+          set -euo pipefail
+          # DEPLOY_DIR не заключаем в кавычки на удалённой стороне, чтобы работал ~
+          ssh -i ~/.ssh/id_deploy -p "$VPS_PORT" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            -o ServerAliveInterval=30 \
+            "$VPS_USER@$VPS_HOST" \
+            "set -e; cd $DEPLOY_DIR && git pull --ff-only && scripts/deploy.sh $PIN_FLAG"
+
+      - name: Удалить ключ
+        if: always()
+        run: rm -f ~/.ssh/id_deploy
