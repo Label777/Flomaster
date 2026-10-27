@@ -9,6 +9,15 @@
 - Архитектура: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Ограничения и обходы: [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
 - Лицензии зависимостей: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+- Приёмочные тесты: [TEST_PLAN.md](TEST_PLAN.md)
+
+## Перед запуском (обязательно)
+
+Среда, в которой писался код, не имела доступа к npm, GitHub и Docker Hub, поэтому три вещи надо сделать на машине с интернетом:
+
+1. `cd web && npm install && npm run build` — первая реальная сборка; закоммитьте появившийся `package-lock.json`.
+2. `scripts/verify-upstream.sh` — сверить протокол WebRTC-сигналинга с upstream и при расхождении поправить `web/src/net/protocol.ts` и `CS_SIGNAL_PATH` (KNOWN_ISSUES №1).
+3. Пройти тесты T-01…T-18 из TEST_PLAN.md, прежде всего онлайн-игру двух игроков.
 
 ## Состав
 
