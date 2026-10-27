@@ -155,9 +155,15 @@ function mountGame(root: HTMLElement, plan: LaunchPlan): () => void {
   document.addEventListener('pointerlockchange', onPointerLock);
 
   async function toggleFullscreen(): Promise<void> {
+    // Safari до 16.4 знает только webkit-префиксные версии Fullscreen API.
+    const doc = document as Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => void };
+    const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
     try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await document.documentElement.requestFullscreen();
+      if (document.fullscreenElement ?? doc.webkitFullscreenElement) {
+        if (typeof document.exitFullscreen === 'function') await document.exitFullscreen();
+        else doc.webkitExitFullscreen?.();
+      } else if (typeof el.requestFullscreen === 'function') await el.requestFullscreen();
+      else el.webkitRequestFullscreen?.();
     } catch (err) {
       log.warn('fullscreen', err);
     }
