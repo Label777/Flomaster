@@ -12,7 +12,6 @@ type Sort = 'default' | 'title' | 'recent';
 
 export function renderHome(root: HTMLElement, route: Route): () => void {
   let query = '';
-  let genre = route.params.get('genre') ?? ALL;
   let sort: Sort = 'default';
 
   const search = h('input', {
@@ -35,6 +34,9 @@ export function renderHome(root: HTMLElement, route: Route): () => void {
   const searchWrap = h('label', { class: 'search-wrap' }, search, h('kbd', { class: 'search-kbd', attrs: { 'aria-hidden': 'true' }, text: '/' }));
 
   const chipValues = [ALL, FAV, ...allGenres()];
+  // Жанр из адреса (#/?genre=…); неизвестный — показываем всё.
+  const wanted = route.params.get('genre') ?? ALL;
+  let genre = chipValues.includes(wanted) && wanted !== FAV ? wanted : ALL;
   const chipLabel = (v: string): string => (v === ALL ? 'Все' : v === FAV ? '★ Избранное' : v);
   const chipButtons = chipValues.map((v) =>
     h('button', {
