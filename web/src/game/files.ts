@@ -115,34 +115,73 @@ export interface ReadProgress {
   totalBytes: number | null;
 }
 
+/** Читает содержимое всех файлов источника в память. */
+export async function readScan(
+  scan: SourceScan,
+  onProgress: (p: ReadProgress) => void,
+  concurrency = 4,
+): Promise<Map<string, Uint8Array>> {
+  const files = scan.files;
+  const unknown = files.some((f) => f.size === null);
+  const totalBytes = unknown ? null : files.reduce((sum, f) => sum + (f.size ?? 0), 0);
+  const out = new Map<string, Uint8Array>();
+  const progress: ReadProgress = { files: 0, totalFiles: files.length, bytes: 0, totalBytes };
+  let next = 0;
+  let lastReport = 0;
+
+  const worker = async (): Promise<void> => {
+    while (next < files.length) {
+      const file = files[next++];
+      if (!file) break;
+      let data: Uint8Array;
+      try {
+        data = await file.read();
+      } catch (err) {
+        throw new Error(`Не удалось прочитать ${file.path}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      out.set(file.path, data);
+      progress.files++;
+      progress.bytes += data.byteLength;
+      const now = performance.now();
+      if (now - lastReport > 80 || progress.files === files.length) {
+        lastReport = now;
+        onProgress({ ...progress });
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, files.length) }, worker));
+  return out;
+}
+
 /**
- * Набор файлов из одного или нескольких источников. Источник, содержащий valve/ или cstrike/,
+ * Прочитанные файлы игры из одного или нескольких источников. Источник с valve/ или cstrike/
  * заменяет ранее выбранные файлы этого корня — так работают отдельные кнопки «valve» и «cstrike».
+ * Содержимое живёт только в памяти вкладки до передачи движку (take()).
  */
 export class GameFileSet {
-  private readonly byPath = new Map<string, ScannedFile>();
+  private data = new Map<string, Uint8Array>();
   private skipped = emptySkip();
-  private readonly labels: Partial<Record<GameRoot, string>> = {};
+  private labels: Partial<Record<GameRoot, string>> = {};
 
-  addSource(scan: SourceScan): void {
-    const roots = new Set<GameRoot>(scan.files.map((f) => rootOf(f.path)));
+  add(scan: SourceScan, data: Map<string, Uint8Array>): void {
+    const roots = new Set<GameRoot>([...data.keys()].map(rootOf));
     for (const root of roots) {
-      for (const path of [...this.byPath.keys()]) if (rootOf(path) === root) this.byPath.delete(path);
+      for (const path of [...this.data.keys()]) if (rootOf(path) === root) this.data.delete(path);
       this.skipped[root] = scan.skipped[root];
       this.labels[root] = scan.label;
     }
-    for (const file of scan.files) this.byPath.set(file.path, file);
+    for (const [path, bytes] of data) this.data.set(path, bytes);
   }
 
   clear(): void {
-    this.byPath.clear();
+    this.data = new Map();
     this.skipped = emptySkip();
-    delete this.labels.valve;
-    delete this.labels.cstrike;
+    this.labels = {};
   }
 
   get size(): number {
-    return this.byPath.size;
+    return this.data.size;
   }
 
   label(root: GameRoot): string | undefined {
@@ -150,19 +189,13 @@ export class GameFileSet {
   }
 
   validate(): Validation {
-    return validateGamePaths(this.byPath.keys());
+    return validateGamePaths(this.data.keys());
   }
 
-  /** Сумма известных размеров (для zip — 0, пока не прочитано). */
-  knownBytes(): number {
+  totalBytes(): number {
     let total = 0;
-    for (const f of this.byPath.values()) total += f.size ?? 0;
+    for (const bytes of this.data.values()) total += bytes.byteLength;
     return total;
-  }
-
-  hasUnknownSizes(): boolean {
-    for (const f of this.byPath.values()) if (f.size === null) return true;
-    return false;
   }
 
   skippedTotal(): SkipStats {
@@ -172,37 +205,13 @@ export class GameFileSet {
     };
   }
 
-  /** Читает всё в память. Карта «путь → содержимое» живёт до монтирования в движок. */
-  async readAll(onProgress: (p: ReadProgress) => void, concurrency = 4): Promise<Map<string, Uint8Array>> {
-    const files = [...this.byPath.values()];
-    const totalBytes = this.hasUnknownSizes() ? null : this.knownBytes();
-    const out = new Map<string, Uint8Array>();
-    const progress: ReadProgress = { files: 0, totalFiles: files.length, bytes: 0, totalBytes };
-    let next = 0;
-    let lastReport = 0;
-
-    const worker = async (): Promise<void> => {
-      while (next < files.length) {
-        const file = files[next++];
-        if (!file) break;
-        let data: Uint8Array;
-        try {
-          data = await file.read();
-        } catch (err) {
-          throw new Error(`Не удалось прочитать ${file.path}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-        out.set(file.path, data);
-        progress.files++;
-        progress.bytes += data.byteLength;
-        const now = performance.now();
-        if (now - lastReport > 80 || progress.files === files.length) {
-          lastReport = now;
-          onProgress({ ...progress });
-        }
-      }
-    };
-
-    await Promise.all(Array.from({ length: Math.min(concurrency, files.length) }, worker));
+  /** Отдаёт файлы движку и забывает их: дальше ссылками владеет только вызывающий. */
+  take(): Map<string, Uint8Array> {
+    const out = this.data;
+    this.clear();
     return out;
   }
 }
+
+/** Файлы, выбранные на #/play; переживают переходы между страницами, но не перезагрузку. */
+export const gameFiles = new GameFileSet();
