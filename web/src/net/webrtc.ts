@@ -139,12 +139,24 @@ export class WebRTCTransport implements SendtoSender {
     const pc = this.pc;
     if (!pc) return null;
     const stats = await pc.getStats();
+    // Активная пара: по transport.selectedCandidatePairId (Chrome, Safari); иначе — nominated/succeeded
+    // или нестандартный флаг selected (Firefox).
+    let selectedId: string | null = null;
+    stats.forEach((report: RTCStats) => {
+      const id = (report as { selectedCandidatePairId?: unknown }).selectedCandidatePairId;
+      if (report.type === 'transport' && typeof id === 'string') selectedId = id;
+    });
     let rtt: number | null = null;
     stats.forEach((report: RTCStats) => {
       if (report.type !== 'candidate-pair') return;
-      const pair = report as RTCIceCandidatePairStats;
-      if (pair.state === 'succeeded' && pair.nominated && typeof pair.currentRoundTripTime === 'number') {
+      const pair = report as RTCIceCandidatePairStats & { selected?: boolean };
+      const active = selectedId !== null ? pair.id === selectedId : pair.state === 'succeeded' && (pair.nominated || pair.selected === true);
+      if (!active) return;
+      if (typeof pair.currentRoundTripTime === 'number') {
         rtt = pair.currentRoundTripTime * 1000;
+      } else if (typeof pair.totalRoundTripTime === 'number' && typeof pair.responsesReceived === 'number' && pair.responsesReceived > 0) {
+        // Браузеры без currentRoundTripTime: среднее за соединение.
+        rtt = (pair.totalRoundTripTime / pair.responsesReceived) * 1000;
       }
     });
     return rtt;
