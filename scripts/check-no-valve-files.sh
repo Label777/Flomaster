@@ -2,6 +2,7 @@
 # CI-проверка: в репозитории нет файлов игры Valve.
 # Падает, если среди отслеживаемых git файлов (git ls-files) есть:
 #   - расширения ресурсов движка: .bsp .wad .mdl .spr .pak .gcf .wav .mp3 .res
+#   - файлы игры вне valve/ и cstrike/: .gam (liblist.gam) .dem (демо) .sav (сохранения) .nav
 #   - архивы .zip / .pk3
 #   - любой файл внутри каталога с именем valve/ или cstrike/ (на любой глубине)
 # Регистр расширений и имён каталогов не учитывается. Нарушители печатаются списком.
@@ -14,7 +15,7 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 2
 fi
 
-ext_re='\.(bsp|wad|mdl|spr|pak|gcf|wav|mp3|res|zip|pk3)$'
+ext_re='\.(bsp|wad|mdl|spr|pak|gcf|wav|mp3|res|gam|dem|sav|nav|zip|pk3)$'
 dir_re='(^|/)(valve|cstrike)/'
 
 offenders=()
