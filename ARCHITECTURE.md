@@ -136,7 +136,7 @@ TURN: coturn в режиме `use-auth-secret`. API выдаёт учётки п
 ```
 
 `GET /api/servers/:id` → то же + `"playerList": [{ "name", "score", "duration" }]`.
-`GET /api/ice` → `{ "iceServers": RTCIceServer[], "ttl": 3600 }`.
+`GET /api/ice` → `{ "iceServers": RTCIceServer[], "ttl": 86400 }`.
 `GET /api/health` → `204` (используется для замера RTT).
 
 `map/players` заполняются по A2S_INFO/A2S_PLAYER. Если сервер на UDP-запросы не отвечает (см. KNOWN_ISSUES), `status` определяется по HTTP-проверке `cs-server:27016`, а `map/players` = `null`.

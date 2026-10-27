@@ -55,7 +55,7 @@ services:
       DOMAIN: ${DOMAIN:?задайте DOMAIN в .env}
       TURN_PORT: ${TURN_PORT:-3478}
       TURN_SECRET: ${TURN_SECRET:?задайте TURN_SECRET в .env}
-      TURN_TTL: ${TURN_TTL:-3600}
+      TURN_TTL: ${TURN_TTL:-86400}
       RCON_PASSWORD: ${RCON_PASSWORD:-}
     expose:
       - "8080"

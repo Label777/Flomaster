@@ -154,7 +154,7 @@ export function loadConfig(env) {
     ];
   }
 
-  const ttl = intEnv(env.TURN_TTL, 3600, 'TURN_TTL', { min: 60, max: 7 * 24 * 3600 });
+  const ttl = intEnv(env.TURN_TTL, 86400, 'TURN_TTL', { min: 60, max: 7 * 24 * 3600 });
   return {
     port: intEnv(env.PORT, 8080, 'PORT', { min: 0, max: 65535 }), // 0 = случайный порт (тесты)
     pollIntervalMs: intEnv(env.POLL_INTERVAL_MS, 5000, 'POLL_INTERVAL_MS', { min: 500, max: 600000 }),
