@@ -9,6 +9,8 @@ import { renderGuide } from './pages/guide';
 import { renderLicenses } from './pages/licenses';
 import { renderUnsupported } from './pages/unsupported';
 import { renderNotFound } from './pages/notfound';
+import { renderCatalogGame, catalogGameTitle } from './pages/game-page';
+import { pageTitle } from './site';
 import { isEngineStarted } from './game/session';
 import { ensureCrossOriginIsolation } from './coi';
 
@@ -21,19 +23,19 @@ const PAGES: Record<string, PageRender> = {
   servers: renderServers,
   guide: renderGuide,
   licenses: renderLicenses,
+  g: renderCatalogGame,
 };
 
 const TITLES: Record<string, string> = {
-  home: 'CS 1.6 в браузере',
-  play: 'Играть — CS 1.6 в браузере',
-  game: 'Игра — CS 1.6 в браузере',
-  servers: 'Серверы — CS 1.6 в браузере',
-  guide: 'Подготовка файлов — CS 1.6 в браузере',
-  licenses: 'Лицензии — CS 1.6 в браузере',
+  play: 'Counter-Strike 1.6 — запуск',
+  game: 'Counter-Strike 1.6',
+  servers: 'Серверы',
+  guide: 'Counter-Strike 1.6 — подготовка файлов',
+  licenses: 'Лицензии',
 };
 
-/** Маршруты, которым нужна поддержка игры; без неё показывается заглушка. */
-const NEEDS_GAME = new Set(['home', 'play', 'game']);
+/** Маршруты CS 1.6, которым нужна поддержка движка; без неё показывается заглушка. Каталог открыт всем. */
+const NEEDS_GAME = new Set(['play', 'game']);
 
 const root = document.getElementById('app');
 let cleanup: Cleanup | null = null;
@@ -52,7 +54,10 @@ function render(): void {
 
   const supported = detectSupport().game;
   const page = !supported && NEEDS_GAME.has(route.name) ? renderUnsupported : (PAGES[route.name] ?? renderNotFound);
-  document.title = TITLES[route.name] ?? 'Страница не найдена — CS 1.6 в браузере';
+  document.title =
+    route.name === 'home'
+      ? pageTitle()
+      : pageTitle(route.name === 'g' ? (catalogGameTitle(route) ?? 'Страница не найдена') : (TITLES[route.name] ?? 'Страница не найдена'));
   document.body.dataset.route = route.name;
 
   const result = page(root, route);

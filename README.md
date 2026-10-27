@@ -10,6 +10,9 @@
 - Ограничения и обходы: [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
 - Лицензии зависимостей: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 - Приёмочные тесты: [TEST_PLAN.md](TEST_PLAN.md)
+- Как добавить игру в каталог: [docs/ADDING_GAMES.md](docs/ADDING_GAMES.md)
+
+Главная страница — каталог игр (поиск, фильтр по жанрам, карточки). Сейчас в нём Counter-Strike 1.6 и демо-игра «Реакция». Новая игра добавляется одной записью в `web/src/catalog/games.ts`. Название сайта в шапке задаётся при сборке переменной `VITE_SITE_NAME` (по умолчанию Flomaster).
 
 ## Перед запуском (обязательно)
 

@@ -1034,3 +1034,283 @@ body.in-game {
     display: none;
   }
 }
+
+/* ---------- каталог игр ---------- */
+
+.catalog-hero {
+  padding-bottom: clamp(20px, 4vw, 40px);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
+}
+.catalog-hero h1 {
+  font-size: clamp(2.2rem, 1.4rem + 3vw, 3.6rem);
+  max-width: 18ch;
+}
+.catalog-hero .hero-lead {
+  max-width: 62ch;
+}
+.catalog-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-top: 24px;
+}
+.catalog-search {
+  flex: 0 1 320px;
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-deep);
+  color: var(--text);
+  font: inherit;
+}
+.catalog-search::placeholder {
+  color: var(--muted);
+}
+.catalog-search:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  min-height: 36px;
+  padding: 4px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 0.95rem/1 var(--font-body);
+  cursor: pointer;
+}
+.chip:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+.chip[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.catalog-count {
+  margin: 0 0 14px;
+  font-size: 0.9rem;
+}
+
+.game-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+.game-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+.game-card:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+.game-card:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .game-card:hover {
+    transform: translateY(-3px);
+  }
+  .game-card:hover .cover-glyph {
+    transform: scale(1.06) rotate(-4deg);
+  }
+}
+.game-card.is-soon {
+  opacity: 0.7;
+}
+.game-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 16px;
+  flex: 1;
+}
+.game-card-title {
+  margin: 0;
+  font-size: 1.35rem;
+}
+.game-card-tagline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.cover {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 20% 10%, var(--cover-from, var(--panel-raised)), transparent 70%),
+    linear-gradient(160deg, var(--cover-from, var(--panel-raised)), var(--cover-to, var(--bg-deep)));
+}
+.cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 4px);
+  pointer-events: none;
+}
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cover-glyph {
+  width: 34%;
+  max-width: 120px;
+  color: rgba(255, 255, 255, 0.82);
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.45));
+  transition: transform 220ms ease;
+}
+.cover-glyph svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.cover-glyph svg rect,
+.cover-glyph svg circle[fill='currentColor'] {
+  color: var(--accent);
+}
+.cover-large {
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+
+.tags {
+  list-style: none;
+  margin: auto 0 0;
+  padding: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.tag-badge {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tag-soon {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+/* ---------- страница игры ---------- */
+
+.crumbs {
+  margin-bottom: 20px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.game-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: clamp(24px, 4vw, 56px);
+  align-items: start;
+}
+.game-page-body > p {
+  max-width: var(--measure);
+}
+.game-page-body .hero-actions {
+  margin: 20px 0;
+}
+.game-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 18px;
+  margin: 24px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.game-meta dt {
+  color: var(--muted);
+}
+.game-meta dd {
+  margin: 0;
+}
+.game-page-legal {
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+@media (max-width: 860px) {
+  .game-page {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- плеер HTML5-игр ---------- */
+
+body.is-player {
+  overflow: hidden;
+}
+.player {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+}
+.player-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--line);
+}
+.player-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 1.1rem/1 var(--font-display);
+  font-stretch: condensed;
+}
+.player-frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #000;
+}
