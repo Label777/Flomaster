@@ -13,6 +13,7 @@ on:
     paths:
       - scripts/build-wc3.sh
       - web/scripts/fetch-wc3.mjs
+      - web/scripts/smoke-wc3.mjs
       - vendor-patches/wc3/**
       - .github/workflows/wc3-engine.yml
 
@@ -66,6 +67,17 @@ jobs:
           body=$(sed -e 's/%/%25/g' -e 's/\r//g' "$RUNNER_TEMP/wc3-summary.txt" | awk 'BEGIN{ORS="%0A"}{print}')
           echo "::notice title=Сборка Warsmash::${body}"
 
+      # Без файлов игры: страницы по пути /games/wc3/ под COOP/COEP, запуск движка в воркере
+      - name: Дымовой тест в Chromium (web/scripts/smoke-wc3.mjs)
+        run: |
+          set -o pipefail
+          npm install --prefix "$RUNNER_TEMP/pw" --no-audit --no-fund playwright@1 > /dev/null
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium > /dev/null
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/pw/node_modules/playwright" \
+            node web/scripts/smoke-wc3.mjs "$RUNNER_TEMP/site" /games/wc3/ 2>&1 | tee "$RUNNER_TEMP/wc3-smoke.log"
+          body=$(tail -n 40 "$RUNNER_TEMP/wc3-smoke.log" | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"}{print}')
+          echo "::notice title=Дымовой тест::${body}"
+
       - uses: actions/upload-artifact@v4
         with:
           name: wc3-warsmash
@@ -80,6 +92,7 @@ jobs:
           path: |
             ${{ runner.temp }}/wc3-build.log
             ${{ runner.temp }}/wc3-script.log
+            ${{ runner.temp }}/wc3-smoke.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -87,7 +100,7 @@ jobs:
       - name: Ошибка сборки → аннотация
         if: failure()
         run: |
-          for f in "$RUNNER_TEMP/wc3-build.log" "$RUNNER_TEMP/wc3-script.log"; do
+          for f in "$RUNNER_TEMP/wc3-smoke.log" "$RUNNER_TEMP/wc3-build.log" "$RUNNER_TEMP/wc3-script.log"; do
             [ -s "$f" ] || continue
             body=$(grep -vE '^[[:space:]]*$' "$f" | tail -n 40 | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"}{print}')
             echo "::error title=Последние строки ${f##*/}::${body}"
