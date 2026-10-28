@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   guard:
-    name: Нет файлов Valve
+    name: Нет файлов игр
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

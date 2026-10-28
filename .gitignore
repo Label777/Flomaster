@@ -29,6 +29,21 @@ valve.zip
 *.wav
 *.mp3
 
+# Файлы игры Warcraft III — НИКОГДА не коммитим
+Warcraft III/
+Maps/
+*.mpq
+*.casc
+*.w3x
+*.w3m
+*.w3n
+*.w3g
+*.blp
+*.mdx
+
+# Сборка Warsmash (scripts/build-wc3.sh) — собирается, не коммитится
+/build/
+
 # Прочее
 .DS_Store
 Thumbs.db

@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: "Проверка: в репозитории нет файлов Valve"
+      - name: "Проверка: в репозитории нет файлов игр"
         run: bash scripts/check-no-valve-files.sh
 
       - name: Клиент cs16-client (снят с npm — файлы с jsDelivr, хеши сверяются)

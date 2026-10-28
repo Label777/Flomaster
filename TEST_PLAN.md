@@ -157,8 +157,9 @@
 
 ### T-14. `scripts/check-no-valve-files.sh` — R-LEGAL
 
-1. `scripts/check-no-valve-files.sh` на чистом клоне. Ожидается: «OK: файлов игры Valve в репозитории нет».
+1. `scripts/check-no-valve-files.sh` на чистом клоне. Ожидается: «OK: файлов игр в репозитории нет».
 2. Негативная проверка во временной ветке: `mkdir -p x/cstrike && touch x/cstrike/a.txt liblist.gam test.bsp && git add -f . && scripts/check-no-valve-files.sh`. Ожидается: код 1, перечислены все три файла. Затем `git reset --hard && git clean -fdx x liblist.gam test.bsp`.
+3. То же для Warcraft III: `mkdir -p "x/Warcraft III" x/Maps && touch "x/Warcraft III/a.txt" x/Maps/b.txt War3.mpq dota.w3x unit.mdx && git add -f . && scripts/check-no-valve-files.sh`. Ожидается: код 1, перечислены все пять файлов. Затем `git reset --hard && git clean -fdx x War3.mpq dota.w3x unit.mdx`.
 
 ### T-15. `scripts/verify-upstream.sh` — сверка протокола — R-NET (блокер)
 
@@ -193,7 +194,7 @@
 
 | Задача | Что делает | Покрывает |
 |---|---|---|
-| `guard` | `scripts/check-no-valve-files.sh`: в `git ls-files` нет `.bsp .wad .mdl .spr .pak .gcf .wav .mp3 .res .gam .dem .sav .nav .zip .pk3` и файлов внутри каталогов `valve/` и `cstrike/` | R-LEGAL |
+| `guard` | `scripts/check-no-valve-files.sh`: в `git ls-files` нет `.bsp .wad .mdl .spr .pak .gcf .wav .mp3 .res .gam .dem .sav .nav .zip .pk3` (Valve), `.mpq .casc .w3x .w3m .w3n .w3g .blp .mdx` (Warcraft III) и файлов внутри каталогов `valve/`, `cstrike/`, `Warcraft III/`, `Maps/` | R-LEGAL |
 | `web` | `npm ci` (или `npm install`, пока нет lock-файла) → `npm run typecheck` (`tsc --noEmit`) → `npm run build` (`tsc` + `vite build` + `scripts/postbuild.mjs`: `LICENSE.txt`, `THIRD_PARTY_NOTICES.txt`, `.br`/`.gz`) → артефакт `web-dist` | R-DEPLOY, R-LEGAL (атрибуция) |
 | `api` | `npm run check` (`node --check` всех модулей) → `npm test` (`node --test`: разбор A2S/Xash info/RCON, конфигурация, TURN REST HMAC, rate limiter, интеграционный тест HTTP + UDP-заглушка сервера) | R-NET (статус), R-TURN |
 | `compose` | `docker compose config -q` для основного файла и оверлея steamcmd; `scripts/deploy.sh --render-only` с тестовыми значениями; проверка отрендеренных `turnserver.conf` и `server.cfg` | R-DEPLOY |
