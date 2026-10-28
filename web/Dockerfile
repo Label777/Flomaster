@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Сборка сайта и образ Caddy со статикой.
 # Контекст сборки — КОРЕНЬ репозитория (compose: context: ., dockerfile: web/Dockerfile).
 ARG NODE_IMAGE=node:22-alpine
@@ -18,7 +19,11 @@ WORKDIR /repo
 COPY scripts/build-wc3.sh scripts/lib.sh scripts/
 COPY vendor-patches/ vendor-patches/
 # На VPS сайт живёт в корне домена — Warsmash в /games/wc3/
-RUN mkdir -p /out \
+# Кэш Gradle и npm между пересборками на VPS (BuildKit): зависимости Warsmash
+# не скачиваются заново, и временная недоступность их Maven-репозитория меньше мешает.
+RUN --mount=type=cache,target=/root/.gradle,id=wc3-gradle \
+    --mount=type=cache,target=/root/.npm,id=wc3-npm \
+    mkdir -p /out \
     && if [ "$WITH_WC3" = "1" ]; then \
       WC3_BASE=/games/wc3/ VITE_WC3_SIGNALING="$VITE_WC3_SIGNALING" bash scripts/build-wc3.sh /out; \
     else echo "WITH_WC3=0: Warcraft III не собирается"; fi
