@@ -80,10 +80,11 @@ export async function scanDirectoryHandle(
     if (!isRelevantDir(segments, hint)) return;
     for await (const entry of handle.values()) {
       const childSegments = [...segments, entry.name];
+      // В lib.dom values() отдаёт FileSystemHandle, и kind его не сужает — приводим явно.
       if (entry.kind === 'directory') {
-        await walk(entry, childSegments);
+        await walk(entry as FileSystemDirectoryHandle, childSegments);
       } else {
-        const file = await entry.getFile();
+        const file = await (entry as FileSystemFileHandle).getFile();
         builder.add(childSegments.join('/'), file.size, readFile(file));
       }
     }
