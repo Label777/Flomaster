@@ -9,6 +9,8 @@ deploy/cs-server/server.cfg
 
 # Node
 node_modules/
+# Локальная копия cs16-client (скачивается web/scripts/fetch-cs16-client.mjs)
+web/vendor/
 dist/
 *.tsbuildinfo
 npm-debug.log*

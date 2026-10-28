@@ -13,3 +13,6 @@ deploy/cs-server/server.cfg
 deploy/coturn/turnserver.conf
 **/*.tmp
 **/*.log
+
+# Локальная копия cs16-client — скачивается внутри образа заново
+web/vendor

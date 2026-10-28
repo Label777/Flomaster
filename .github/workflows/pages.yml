@@ -33,9 +33,18 @@ jobs:
       - name: "Проверка: в репозитории нет файлов Valve"
         run: bash scripts/check-no-valve-files.sh
 
+      - name: Клиент cs16-client (снят с npm — файлы с jsDelivr, хеши сверяются)
+        working-directory: web
+        run: |
+          set -o pipefail
+          node scripts/fetch-cs16-client.mjs 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+
       - name: Установка зависимостей
         working-directory: web
-        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+        run: |
+          set -o pipefail
+          if [ -f package-lock.json ]; then cmd="npm ci"; else cmd="npm install"; fi
+          $cmd --no-audit --no-fund 2>&1 | tee -a "$RUNNER_TEMP/build.log"
 
       - name: Сборка
         working-directory: web
@@ -48,7 +57,9 @@ jobs:
           VITE_COI_SW: '1'
           # Pages сжимает ответы сам и не отдаёт .br/.gz
           POSTBUILD_NO_COMPRESS: '1'
-        run: npm run build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee -a "$RUNNER_TEMP/build.log"
 
       - name: Без Jekyll
         run: touch web/dist/.nojekyll
@@ -56,6 +67,15 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
+
+      # Хвост лога — в аннотацию: её видно на странице запуска без скачивания логов
+      - name: Ошибка сборки → аннотация
+        if: failure()
+        run: |
+          f="$RUNNER_TEMP/build.log"
+          [ -f "$f" ] || exit 0
+          body=$(grep -vE '^[[:space:]]*$' "$f" | tail -n 40 | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"}{print}')
+          echo "::error title=Последние строки лога сборки::${body}"
 
   deploy:
     needs: build

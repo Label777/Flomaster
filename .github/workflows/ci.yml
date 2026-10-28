@@ -30,6 +30,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Клиент cs16-client (снят с npm — файлы с jsDelivr, хеши сверяются)
+        run: node scripts/fetch-cs16-client.mjs
       - name: Зависимости
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm install; fi
