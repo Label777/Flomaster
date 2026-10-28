@@ -66,6 +66,8 @@ jobs:
       - run: cp .env.example .env
       - run: docker compose config -q
       - run: docker compose -f docker-compose.yml -f docker-compose.steamcmd.yml config -q
+      - name: docker compose config (сигналинг Warcraft III)
+        run: WC3_SIGNALING_DB_PASSWORD=ci docker compose -f docker-compose.yml -f docker-compose.wc3-signaling.yml config -q
       - name: Рендер шаблонов (scripts/deploy.sh --render-only)
         run: |
           sed -i \
@@ -90,6 +92,7 @@ jobs:
           docker buildx build --platform linux/amd64 \
             --build-arg NODE_IMAGE=node:22-alpine \
             --build-arg CADDY_IMAGE=caddy:2.11-alpine \
+            --build-arg WITH_WC3=1 \
             -f web/Dockerfile -t cs16-web/web:ci .
       - name: Образ api
         run: |

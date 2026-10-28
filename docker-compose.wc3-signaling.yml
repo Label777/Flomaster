@@ -1,0 +1,55 @@
+# Необязательно: свой сервер сигналинга для Warcraft III (Warsmash, @poki/netlib).
+#
+# Без него браузеры игроков находят друг друга через сервер Poki (wss://netlib.poki.io),
+# условия которого для сторонних сайтов не опубликованы (KNOWN_ISSUES.md, раздел G).
+# С ним — через ваш VPS: wss://<DOMAIN>/wc3-signaling/v0/signaling (маршрут в Caddyfile).
+# Сама игра идёт напрямую между браузерами (WebRTC), сервер только сводит игроков.
+#
+# Запуск:
+#   1. в .env: WC3_SIGNALING_DB_PASSWORD=<openssl rand -hex 24>
+#             VITE_WC3_SIGNALING=wss://<DOMAIN>/wc3-signaling/v0/signaling
+#   2. docker compose -f docker-compose.yml -f docker-compose.wc3-signaling.yml up -d --build
+#      (web пересобирается: адрес сигналинга зашивается в сборку Warsmash)
+#   Для сайта на GitHub Pages — тот же адрес в переменной репозитория WC3_SIGNALING.
+#
+# Ограничение: TURN у сервера Poki выдаётся через Cloudflare (CLOUDFLARE_APP_ID/AUTH_KEY);
+# без этих ключей игроки за строгим NAT (часть мобильных сетей) друг к другу не подключатся.
+# Наш coturn для этого НЕ открываем: он ретранслирует только до PUBLIC_IP (KNOWN_ISSUES №20).
+
+services:
+  wc3-signaling:
+    restart: unless-stopped
+    build:
+      # @poki/netlib v0.0.18 — та же версия, что у Warsmash (ISC). Коммит тега.
+      context: https://github.com/poki/netlib.git#e28f5d62356664175cecd28b5ffdaa5418108d02
+    environment:
+      DATABASE_URL: postgres://netlib:${WC3_SIGNALING_DB_PASSWORD:?задайте WC3_SIGNALING_DB_PASSWORD в .env}@wc3-signaling-db:5432/netlib?sslmode=disable
+      ADDR: ":8080"
+    expose:
+      - "8080"
+    depends_on:
+      wc3-signaling-db:
+        condition: service_healthy
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  wc3-signaling-db:
+    restart: unless-stopped
+    image: ${WC3_SIGNALING_DB_IMAGE:-postgres:16-alpine}
+    environment:
+      POSTGRES_USER: netlib
+      POSTGRES_DB: netlib
+      POSTGRES_PASSWORD: ${WC3_SIGNALING_DB_PASSWORD:?задайте WC3_SIGNALING_DB_PASSWORD в .env}
+    volumes:
+      - wc3_signaling_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netlib -d netlib"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  wc3_signaling_db:

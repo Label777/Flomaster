@@ -25,6 +25,9 @@ services:
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
         CADDY_IMAGE: ${CADDY_IMAGE:-caddy:2.11-alpine}
+        # Warcraft III (Warsmash): 0 — не собирать; адрес своего сигналинга — см. docker-compose.wc3-signaling.yml
+        WITH_WC3: ${WITH_WC3:-1}
+        VITE_WC3_SIGNALING: ${VITE_WC3_SIGNALING:-}
     environment:
       DOMAIN: ${DOMAIN:?задайте DOMAIN в .env}
       ACME_EMAIL: ${ACME_EMAIL:?задайте ACME_EMAIL в .env}

@@ -4,6 +4,8 @@
 # Без игрового сервера сайт работает в офлайн-режиме. Чтобы подключить серверы на VPS,
 # задайте переменную репозитория API_BASE (Settings → Secrets and variables → Actions →
 # Variables), например https://cs.example.com, а на VPS в .env — ALLOWED_ORIGINS=https://<владелец>.github.io
+# Warcraft III собирается здесь же (Warsmash, JDK 17). Свой сигналинг для его сетевой игры —
+# переменная WC3_SIGNALING (wss://…/wc3-signaling/v0/signaling), иначе сервер Poki.
 name: pages
 
 on:
@@ -30,6 +32,12 @@ jobs:
         with:
           node-version: 22
 
+      # Warcraft III (Warsmash) собирается TeaVM на JDK 17
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: "Проверка: в репозитории нет файлов игр"
         run: bash scripts/check-no-valve-files.sh
 
@@ -38,6 +46,17 @@ jobs:
         run: |
           set -o pipefail
           node scripts/fetch-cs16-client.mjs 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+
+      - name: Warcraft III — сборка Warsmash (web/public/games/wc3)
+        working-directory: web
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+          # Свой сервер сигналинга (docker-compose.wc3-signaling.yml); пусто — сервер Poki
+          VITE_WC3_SIGNALING: ${{ vars.WC3_SIGNALING }}
+          WC3_LOG: ${{ runner.temp }}/wc3-build.log
+        run: |
+          set -o pipefail
+          node scripts/fetch-wc3.mjs 2>&1 | tee -a "$RUNNER_TEMP/build.log"
 
       - name: Установка зависимостей
         working-directory: web
@@ -74,6 +93,8 @@ jobs:
         run: |
           f="$RUNNER_TEMP/build.log"
           [ -f "$f" ] || exit 0
+          # Если упала сборка Warsmash, подробности — в её собственном логе
+          if [ -s "$RUNNER_TEMP/wc3-build.log" ] && grep -q 'ОШИБКА' "$f"; then f="$RUNNER_TEMP/wc3-build.log"; fi
           body=$(grep -vE '^[[:space:]]*$' "$f" | tail -n 40 | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"}{print}')
           echo "::error title=Последние строки лога сборки::${body}"
 

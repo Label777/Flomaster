@@ -16,3 +16,6 @@ deploy/coturn/turnserver.conf
 
 # Локальная копия cs16-client — скачивается внутри образа заново
 web/vendor
+# Сборка Warsmash — собирается внутри образа заново (стадия wc3 в web/Dockerfile)
+web/public/games/wc3
+build
