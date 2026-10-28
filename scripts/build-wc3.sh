@@ -155,7 +155,7 @@ if [[ -f $web_src/package-lock.json ]]; then
   fi
 fi
 
-log_info "./gradlew :html:buildWeb (TeaVM, обычно 10–20 минут; лог: $LOG)…"
+log_info "./gradlew :html:buildWeb (TeaVM, в GitHub Actions 2–9 минут; лог: $LOG)…"
 chmod +x "$src/gradlew"
 if ! (cd "$src" && ./gradlew --no-daemon --console=plain :html:buildWeb) >>"$LOG" 2>&1; then
   if grep -qiE 'Could not resolve|UnknownHostException|Connection refused|Could not GET|Could not HEAD|Unable to tunnel|403 Forbidden' "$LOG"; then
