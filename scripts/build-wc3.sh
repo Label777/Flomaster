@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Сборка веб-порта Warsmash (Warcraft III) на закреплённом коммите — фаза 0 (KNOWN_ISSUES.md, раздел G).
+# Сборка веб-порта Warsmash (Warcraft III) на закреплённом коммите (KNOWN_ISSUES.md, раздел G).
 #
 # Что делает:
 #   1. берёт исходники ErikSom/WarsmashModEngine ровно на коммите WC3_COMMIT и сверяет хеш;
 #   2. накладывает наши патчи vendor-patches/wc3/*.patch (если они есть) по алфавиту;
 #   3. собирает ./gradlew :html:buildWeb (TeaVM → JS, затем сайт-оболочка Astro + Preact);
-#   4. удаляет из результата картинку с артом Blizzard (заставка upstream);
+#   4. удаляет из результата картинки, которые мы не раздаём (арт Blizzard в заставке upstream и фон
+#      неизвестного происхождения; наш патч 0001 их больше не использует);
 #   5. падает, если в результате оказались файлы игры (.mpq .w3x .blp .mdx …);
 #   6. копирует результат в OUT и пишет туда BUILD-INFO.txt (коммит, патчи, где исходники — AGPL-3.0).
 #
@@ -13,6 +14,9 @@
 #   WC3_SRC=<каталог>   — использовать готовый клон (коммит всё равно сверяется, патчи накладываются)
 #   WC3_LOG=<файл>      — куда писать лог Gradle/npm (по умолчанию <временный каталог>/build.log)
 #   KEEP=1              — не удалять временный клон (путь будет напечатан)
+#   WC3_BASE=<путь>     — где сборка будет лежать на сайте: /games/wc3/ (по умолчанию) или
+#                         /<репозиторий>/games/wc3/ на GitHub Pages; начинается и заканчивается на «/»
+#   VITE_WC3_SIGNALING=<wss://…> — свой сервер сигналинга @poki/netlib; пусто — сервер Poki
 #
 # Нужно: git, JDK 17 (Gradle 7.3.3 из wrapper upstream на JDK 21 не запускается), Node 18+ с npm,
 # сеть до github.com, services.gradle.org, Maven Central, jitpack.io и registry.npmjs.org.
@@ -30,11 +34,22 @@ OUT=${1:-$REPO_ROOT/build/wc3}
 PATCH_DIR=$REPO_ROOT/vendor-patches/wc3
 
 # Картинки upstream, которые мы не раздаём: рендер модели юнита из Warcraft III (арт Blizzard).
-STRIP_FILES=(goblin-tinker.webp)
+STRIP_FILES=(goblin-tinker.webp bg.png)
 # Расширения файлов игры: их в сборке быть не должно ни при каких условиях.
 GAME_EXT_RE='\.(mpq|w3x|w3m|w3n|w3g|w3z|blp|mdx|mdl|casc|dds|flac|wav|mp3)$'
 # Что должно появиться после сборки (имена из BuildWorkerTeaVM, BuildEngineWorkerTeaVM, webapp-src, Astro).
 REQUIRED_FILES=(index.html play/index.html multiplayer/index.html engine-worker.js engine-worker-boot.js worker.js worker-boot.js)
+
+WC3_BASE=${WC3_BASE:-/games/wc3/}
+[[ $WC3_BASE == /*/ || $WC3_BASE == / ]] || {
+  log_error "WC3_BASE должен начинаться и заканчиваться на «/», получено «$WC3_BASE»"
+  exit 2
+}
+WC3_SIGNALING=${VITE_WC3_SIGNALING:-}
+if [[ -n $WC3_SIGNALING && ! $WC3_SIGNALING =~ ^wss?:// ]]; then
+  log_error "VITE_WC3_SIGNALING должен начинаться с wss:// (или ws:// для локальной проверки), получено «$WC3_SIGNALING»"
+  exit 2
+fi
 
 [[ $WC3_COMMIT =~ ^[0-9a-f]{40}$ ]] || {
   log_error "WC3_COMMIT должен быть полным SHA-1 из 40 символов, получено «$WC3_COMMIT»"
@@ -157,7 +172,10 @@ fi
 
 log_info "./gradlew :html:buildWeb (TeaVM, в GitHub Actions 2–9 минут; лог: $LOG)…"
 chmod +x "$src/gradlew"
-if ! (cd "$src" && ./gradlew --no-daemon --console=plain :html:buildWeb) >>"$LOG" 2>&1; then
+log_info "путь на сайте: $WC3_BASE; сигналинг: ${WC3_SIGNALING:-сервер Poki по умолчанию}"
+# WARSMASH_BASE читает astro.config.mjs (патч 0001), PUBLIC_WC3_SIGNALING — poki-bridge.ts.
+if ! (cd "$src" && WARSMASH_BASE=$WC3_BASE PUBLIC_WC3_SIGNALING=$WC3_SIGNALING \
+  ./gradlew --no-daemon --console=plain :html:buildWeb) >>"$LOG" 2>&1; then
   if grep -qiE 'Could not resolve|UnknownHostException|Connection refused|Could not GET|Could not HEAD|Unable to tunnel|403 Forbidden' "$LOG"; then
     log_error "Gradle не смог скачать зависимости или сам себя (нужен доступ к services.gradle.org, Maven Central, jitpack.io)"
     grep -m5 -iE 'Could not resolve|UnknownHostException|Could not GET|Unable to tunnel|403 Forbidden' "$LOG" >&2 || true
@@ -173,6 +191,10 @@ for f in "${REQUIRED_FILES[@]}"; do
   [[ -f $dist/$f ]] || missing+=("$f")
 done
 ((${#missing[@]} == 0)) || fail_with_log "в сборке нет файлов: ${missing[*]}"
+# Патч 0001 должен был перевести Astro на WC3_BASE: скрипты страниц грузятся из <база>_astro/.
+if [[ $WC3_BASE != / ]] && ! grep -qF "${WC3_BASE}_astro/" "$dist/play/index.html"; then
+  fail_with_log "play/index.html не ссылается на ${WC3_BASE}_astro/ — путь сборки не применился (патч vendor-patches/wc3/0001?)"
+fi
 
 # --- 4–5. Чистка и проверка результата ----------------------------------------
 stripped=()
@@ -180,7 +202,7 @@ for name in "${STRIP_FILES[@]}"; do
   while IFS= read -r -d '' f; do
     rm -f "$f"
     stripped+=("${f#"$dist"/}")
-    log_warn "удалён ${f#"$dist"/}: это рендер модели из Warcraft III (арт Blizzard), сайт его не раздаёт"
+    log_warn "удалён ${f#"$dist"/}: картинка upstream, которую сайт не раздаёт"
   done < <(find "$dist" -type f -iname "$name" -print0)
 done
 
@@ -222,10 +244,12 @@ sha256_of() {
     echo "Патчей нет: сборка соответствует коммиту upstream."
   fi
   if ((${#stripped[@]} > 0)); then
-    echo "Удалено из сборки (арт Blizzard): ${stripped[*]}."
+    echo "Удалено из сборки (арт upstream, который сайт не раздаёт): ${stripped[*]}."
   else
     echo "Удалять из сборки ничего не пришлось (искали: ${STRIP_FILES[*]})."
   fi
+  echo "Путь на сайте: $WC3_BASE"
+  echo "Сигналинг: ${WC3_SIGNALING:-wss://netlib.poki.io/v0/signaling (Poki, по умолчанию)}"
   echo "Собрано: $(date -u +%Y-%m-%dT%H:%M:%SZ), JDK $java_ver, Node $(node -v)"
   echo
   echo "Файлы игры Warcraft III в сборку не входят: игрок выбирает свою копию, файлы читаются только в его браузере."
@@ -238,4 +262,4 @@ rm -rf "$OUT"
 cp -a "$dist" "$OUT"
 size=$(du -sh "$OUT" | cut -f1)
 log_ok "сборка Warsmash ${WC3_COMMIT:0:12}: $OUT ($size, $(find "$OUT" -type f | wc -l | tr -d ' ') файлов)"
-log_info "локальная проверка: cd $OUT && python3 -m http.server 8000  →  http://127.0.0.1:8000/ (чек-лист — TEST_PLAN.md, раздел 5)"
+log_info "сборка рассчитана на адрес $WC3_BASE: раздайте каталог так, чтобы она открывалась по этому пути (чек-лист — TEST_PLAN.md, раздел 5)"

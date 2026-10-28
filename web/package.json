@@ -10,6 +10,7 @@
   },
   "scripts": {
     "fetch:cs16": "node scripts/fetch-cs16-client.mjs",
+    "fetch:wc3": "node scripts/fetch-wc3.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build && node scripts/postbuild.mjs",
     "typecheck": "tsc --noEmit",

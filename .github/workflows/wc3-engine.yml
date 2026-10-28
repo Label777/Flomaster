@@ -1,10 +1,9 @@
-# Warcraft III, фаза 0 (KNOWN_ISSUES.md, раздел G): сборка веб-порта Warsmash на закреплённом коммите.
+# Warcraft III (KNOWN_ISSUES.md, раздел G): проверочная сборка веб-порта Warsmash с нашими патчами.
 #
-# Зачем: в среде разработки нет доступа к Maven Central и npm, поэтому сборка проверяется здесь.
-# Результат — артефакт wc3-warsmash (7 дней) для ручной проверки по TEST_PLAN.md, раздел 5:
-# скачать, распаковать, `python3 -m http.server 8000` в его каталоге, открыть http://127.0.0.1:8000/.
+# Сайт собирает Warsmash сам (pages.yml, web/Dockerfile); этот workflow — быстрая проверка
+# скрипта и патчей и артефакт для ручных тестов (TEST_PLAN.md, раздел 5): скачать wc3-warsmash,
+# распаковать, `python3 -m http.server 8000` в его каталоге, открыть http://127.0.0.1:8000/games/wc3/.
 #
-# На сайт (pages.yml, образ web) эта сборка НЕ попадает: интеграция — фаза 1, после решения по движку.
 # Запуск вручную: Actions → wc3-engine → Run workflow. Сам запускается при изменении скрипта сборки и патчей.
 name: wc3-engine
 
@@ -13,6 +12,7 @@ on:
   push:
     paths:
       - scripts/build-wc3.sh
+      - web/scripts/fetch-wc3.mjs
       - vendor-patches/wc3/**
       - .github/workflows/wc3-engine.yml
 
@@ -44,12 +44,12 @@ jobs:
       - name: Сборка (scripts/build-wc3.sh)
         run: |
           set -o pipefail
-          WC3_LOG="$RUNNER_TEMP/wc3-build.log" scripts/build-wc3.sh "$RUNNER_TEMP/wc3" 2>&1 | tee "$RUNNER_TEMP/wc3-script.log"
+          WC3_LOG="$RUNNER_TEMP/wc3-build.log" WC3_BASE=/games/wc3/ scripts/build-wc3.sh "$RUNNER_TEMP/site/games/wc3" 2>&1 | tee "$RUNNER_TEMP/wc3-script.log"
 
       # Сводка — в аннотацию и в Summary: видно на странице запуска без скачивания артефакта
       - name: Что собралось
         run: |
-          out="$RUNNER_TEMP/wc3"
+          out="$RUNNER_TEMP/site/games/wc3"
           {
             cat "$out/BUILD-INFO.txt"
             echo
@@ -69,7 +69,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: wc3-warsmash
-          path: ${{ runner.temp }}/wc3
+          path: ${{ runner.temp }}/site
           if-no-files-found: error
           retention-days: 7
 
