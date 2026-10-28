@@ -60,6 +60,11 @@
 	@html path / /index.html
 	header @html Cache-Control no-cache
 
+	# Warcraft III (Warsmash): имена файлов без хэшей (app.js, engine-worker.js…) —
+	# браузер перепроверяет их по ETag, чтобы после обновления не остался старый движок.
+	@wc3 path /games/wc3/*
+	header @wc3 Cache-Control no-cache
+
 	# API статуса серверов и TURN-учёток (контейнер api, наружу не публикуется).
 	handle /api/* {
 		encode zstd gzip
@@ -78,6 +83,12 @@
 		handle {
 			respond 404
 		}
+	}
+
+	# Сигналинг Warcraft III (необязательный сервис из docker-compose.wc3-signaling.yml):
+	# /wc3-signaling/v0/signaling → wc3-signaling:8080/v0/signaling. Без сервиса — 502.
+	handle_path /wc3-signaling/* {
+		reverse_proxy wc3-signaling:8080
 	}
 
 	# Статика сайта. .br/.gz рядом с файлами генерируются при сборке web/.

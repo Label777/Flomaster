@@ -31,6 +31,10 @@
 
 `launch: { kind: 'external', href: 'https://example.com/game/' }` — кнопка «Играть ↗» откроет игру в новой вкладке.
 
+## 2a. Игра-движок, который собирается при сборке сайта
+
+Как Warcraft III: движок (Warsmash) не коммитится, а собирается скриптом (`scripts/build-wc3.sh` через `web/scripts/fetch-wc3.mjs`) в `web/public/games/<id>/` перед `vite build` — в `pages.yml` и в `web/Dockerfile`. Каталог `public/games/<id>/` добавьте в `.gitignore`. Запуск — обычный `kind: 'iframe'`. Если движку нужно хранилище браузера (OPFS, IndexedDB), он должен лежать на нашем origin: плеер даёт своим играм постоянное хранилище, а чужим (`https://…`) — временное (`credentialless`).
+
 ## 3. Игра со своей страницей запуска
 
 Как Counter-Strike 1.6: `launch: { kind: 'route', href: '#/play' }` и своя страница в `web/src/pages/`, зарегистрированная в `PAGES` в `web/src/main.ts`. Нужна для игр, которым требуется загрузчик файлов, настройки или сеть.

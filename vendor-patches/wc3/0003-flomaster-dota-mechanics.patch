@@ -1,0 +1,1342 @@
+diff --git a/core/src/com/etheller/warsmash/parsers/jass/FlomasterNatives.java b/core/src/com/etheller/warsmash/parsers/jass/FlomasterNatives.java
+new file mode 100644
+index 00000000..8c5a26dd
+--- /dev/null
++++ b/core/src/com/etheller/warsmash/parsers/jass/FlomasterNatives.java
+@@ -0,0 +1,268 @@
++package com.etheller.warsmash.parsers.jass;
++
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++
++import com.etheller.interpreter.ast.scope.trigger.Trigger;
++import com.etheller.interpreter.ast.util.JassProgram;
++import com.etheller.interpreter.ast.value.BooleanJassValue;
++import com.etheller.interpreter.ast.value.HandleJassType;
++import com.etheller.interpreter.ast.value.HandleJassValue;
++import com.etheller.interpreter.ast.value.IntegerJassValue;
++import com.etheller.interpreter.ast.value.JassValue;
++import com.etheller.interpreter.ast.value.JassValueVisitor;
++import com.etheller.interpreter.ast.value.RealJassValue;
++import com.etheller.interpreter.ast.value.StringJassValue;
++import com.etheller.interpreter.ast.value.visitor.BooleanJassValueVisitor;
++import com.etheller.interpreter.ast.value.visitor.IntegerJassValueVisitor;
++import com.etheller.interpreter.ast.value.visitor.ObjectJassValueVisitor;
++import com.etheller.interpreter.ast.value.visitor.RealJassValueVisitor;
++import com.etheller.interpreter.ast.value.visitor.StringJassValueVisitor;
++import com.etheller.warsmash.parsers.jass.scope.CommonTriggerExecutionScope;
++import com.etheller.warsmash.util.War3ID;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.inventory.CAbilityInventory;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.util.CBuffTimedLife;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerJass;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.FlomasterChatEvent;
++
++/**
++ * Flomaster: нативки JASS, которых нет в Warsmash, а пользовательским картам (DotA Allstars и др.) они
++ * нужны. Регистрируются из {@code Jass2.CommonEnvironment} до разбора common.j; если upstream позже
++ * реализует ту же нативку, её реализация (зарегистрированная раньше) будет перезаписана этой —
++ * поэтому сюда попадает только то, чего в upstream нет.
++ */
++final class FlomasterNatives {
++	private FlomasterNatives() {
++	}
++
++	/** Игровой кэш (gamecache) в памяти: карта → категория → ключ → значение. На диск не сохраняется. */
++	static final class GameCache {
++		private final Map<String, Map<String, Object>> missions = new HashMap<>();
++
++		void put(final String mission, final String key, final Object value) {
++			this.missions.computeIfAbsent(mission, k -> new HashMap<>()).put(key, value);
++		}
++
++		Object get(final String mission, final String key) {
++			final Map<String, Object> keys = this.missions.get(mission);
++			return keys == null ? null : keys.get(key);
++		}
++
++		boolean has(final String mission, final String key, final Class<?> type) {
++			return type.isInstance(get(mission, key));
++		}
++
++		void flushKey(final String mission, final String key) {
++			final Map<String, Object> keys = this.missions.get(mission);
++			if (keys != null) {
++				keys.remove(key);
++			}
++		}
++
++		void flushMission(final String mission) {
++			this.missions.remove(mission);
++		}
++
++		void flushAll() {
++			this.missions.clear();
++		}
++	}
++
++	private static <T> T arg(final List<JassValue> arguments, final int index, final JassValueVisitor<T> visitor) {
++		final JassValue value = arguments.get(index);
++		return value == null ? null : value.visit(visitor);
++	}
++
++	private static String str(final List<JassValue> arguments, final int index) {
++		final String value = arg(arguments, index, StringJassValueVisitor.getInstance());
++		return value == null ? "" : value;
++	}
++
++	static void register(final JassProgram jassProgramVisitor, final CSimulation simulation,
++			final HandleJassType unitType, final HandleJassType eventType, final HandleJassType gamecacheType) {
++		// --- Продажа юнитов (таверны) ------------------------------------------------
++		jassProgramVisitor.getJassNativeManager().createNative("GetSoldUnit",
++				(arguments, globalScope, triggerScope) -> new HandleJassValue(unitType,
++						((CommonTriggerExecutionScope) triggerScope).getSoldUnit()));
++		jassProgramVisitor.getJassNativeManager().createNative("GetSellingUnit",
++				(arguments, globalScope, triggerScope) -> new HandleJassValue(unitType,
++						((CommonTriggerExecutionScope) triggerScope).getSellingUnit()));
++		jassProgramVisitor.getJassNativeManager().createNative("GetBuyingUnit",
++				(arguments, globalScope, triggerScope) -> new HandleJassValue(unitType,
++						((CommonTriggerExecutionScope) triggerScope).getBuyingUnit()));
++
++		// --- Чат ----------------------------------------------------------------------
++		jassProgramVisitor.getJassNativeManager().createNative("TriggerRegisterPlayerChatEvent",
++				(arguments, globalScope, triggerScope) -> {
++					final Trigger whichTrigger = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++					final CPlayerJass whichPlayer = arg(arguments, 1, ObjectJassValueVisitor.getInstance());
++					if ((whichTrigger == null) || !(whichPlayer instanceof CPlayer)) {
++						return eventType.getNullValue();
++					}
++					final String chatMessageToDetect = str(arguments, 2);
++					final Boolean exactMatchOnly = arg(arguments, 3, BooleanJassValueVisitor.getInstance());
++					final FlomasterChatEvent event = new FlomasterChatEvent(globalScope, whichPlayer, whichTrigger,
++							chatMessageToDetect, Boolean.TRUE.equals(exactMatchOnly));
++					((CPlayer) whichPlayer).addEvent(event);
++					return new HandleJassValue(eventType, event);
++				});
++		jassProgramVisitor.getJassNativeManager().createNative("GetEventPlayerChatString",
++				(arguments, globalScope, triggerScope) -> {
++					final String s = ((CommonTriggerExecutionScope) triggerScope).getChatString();
++					return StringJassValue.of(s == null ? "" : s);
++				});
++		jassProgramVisitor.getJassNativeManager().createNative("GetEventPlayerChatStringMatched",
++				(arguments, globalScope, triggerScope) -> {
++					final String s = ((CommonTriggerExecutionScope) triggerScope).getChatStringMatched();
++					return StringJassValue.of(s == null ? "" : s);
++				});
++
++		// --- Герои ----------------------------------------------------------------------
++		jassProgramVisitor.getJassNativeManager().createNative("ReviveHero",
++				(arguments, globalScope, triggerScope) -> {
++					final CUnit hero = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++					if (hero == null) {
++						return BooleanJassValue.FALSE;
++					}
++					final float x = arg(arguments, 1, RealJassValueVisitor.getInstance()).floatValue();
++					final float y = arg(arguments, 2, RealJassValueVisitor.getInstance()).floatValue();
++					final Boolean eyecandy = arg(arguments, 3, BooleanJassValueVisitor.getInstance());
++					return BooleanJassValue
++							.of(hero.flomasterReviveHero(simulation, x, y, Boolean.TRUE.equals(eyecandy)));
++				});
++		jassProgramVisitor.getJassNativeManager().createNative("ReviveHeroLoc",
++				(arguments, globalScope, triggerScope) -> {
++					final CUnit hero = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++					final AbilityPointTarget loc = arg(arguments, 1, ObjectJassValueVisitor.getInstance());
++					if ((hero == null) || (loc == null)) {
++						return BooleanJassValue.FALSE;
++					}
++					final Boolean eyecandy = arg(arguments, 2, BooleanJassValueVisitor.getInstance());
++					return BooleanJassValue
++							.of(hero.flomasterReviveHero(simulation, loc.x, loc.y, Boolean.TRUE.equals(eyecandy)));
++				});
++
++		// --- Юниты ------------------------------------------------------------------------
++		jassProgramVisitor.getJassNativeManager().createNative("UnitApplyTimedLife",
++				(arguments, globalScope, triggerScope) -> {
++					final CUnit whichUnit = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++					if (whichUnit != null) {
++						final int buffId = arg(arguments, 1, IntegerJassValueVisitor.getInstance());
++						final float duration = arg(arguments, 2, RealJassValueVisitor.getInstance()).floatValue();
++						whichUnit.add(simulation, new CBuffTimedLife(simulation.getHandleIdAllocator().createId(),
++								new War3ID(buffId), duration, false));
++					}
++					return null;
++				});
++		jassProgramVisitor.getJassNativeManager().createNative("UnitResetCooldown",
++				(arguments, globalScope, triggerScope) -> {
++					final CUnit whichUnit = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++					if (whichUnit != null) {
++						whichUnit.flomasterResetCooldowns();
++					}
++					return null;
++				});
++		jassProgramVisitor.getJassNativeManager().createNative("UnitInventorySize",
++				(arguments, globalScope, triggerScope) -> {
++					final CUnit whichUnit = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++					if (whichUnit == null) {
++						return IntegerJassValue.ZERO;
++					}
++					final CAbilityInventory inventory = whichUnit.getInventoryData();
++					return IntegerJassValue.of(inventory == null ? 0 : inventory.getItemCapacity());
++				});
++
++		// --- Игровой кэш (gamecache) в памяти -------------------------------------------------
++		jassProgramVisitor.getJassNativeManager().createNative("InitGameCache",
++				(arguments, globalScope, triggerScope) -> new HandleJassValue(gamecacheType, new GameCache()));
++		jassProgramVisitor.getJassNativeManager().createNative("SaveGameCache",
++				(arguments, globalScope, triggerScope) -> BooleanJassValue.TRUE);
++		jassProgramVisitor.getJassNativeManager().createNative("ReloadGameCachesFromDisk",
++				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
++		registerStore(jassProgramVisitor, "StoreInteger", IntegerJassValueVisitor.getInstance());
++		registerStore(jassProgramVisitor, "StoreReal", RealJassValueVisitor.getInstance());
++		registerStore(jassProgramVisitor, "StoreBoolean", BooleanJassValueVisitor.getInstance());
++		registerStore(jassProgramVisitor, "StoreString", StringJassValueVisitor.getInstance());
++		jassProgramVisitor.getJassNativeManager().createNative("GetStoredInteger",
++				(arguments, globalScope, triggerScope) -> {
++					final Object v = stored(arguments);
++					return IntegerJassValue.of(v instanceof Integer ? (Integer) v : 0);
++				});
++		jassProgramVisitor.getJassNativeManager().createNative("GetStoredReal",
++				(arguments, globalScope, triggerScope) -> {
++					final Object v = stored(arguments);
++					return RealJassValue.of(v instanceof Double ? (Double) v : 0.0);
++				});
++		jassProgramVisitor.getJassNativeManager().createNative("GetStoredBoolean",
++				(arguments, globalScope, triggerScope) -> BooleanJassValue.of(Boolean.TRUE.equals(stored(arguments))));
++		jassProgramVisitor.getJassNativeManager().createNative("GetStoredString",
++				(arguments, globalScope, triggerScope) -> {
++					final Object v = stored(arguments);
++					return StringJassValue.of(v instanceof String ? (String) v : "");
++				});
++		registerHave(jassProgramVisitor, "HaveStoredInteger", Integer.class);
++		registerHave(jassProgramVisitor, "HaveStoredReal", Double.class);
++		registerHave(jassProgramVisitor, "HaveStoredBoolean", Boolean.class);
++		registerHave(jassProgramVisitor, "HaveStoredString", String.class);
++		for (final String flush : new String[] { "FlushStoredInteger", "FlushStoredReal", "FlushStoredBoolean",
++				"FlushStoredString", "FlushStoredUnit" }) {
++			jassProgramVisitor.getJassNativeManager().createNative(flush, (arguments, globalScope, triggerScope) -> {
++				final GameCache cache = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++				if (cache != null) {
++					cache.flushKey(str(arguments, 1), str(arguments, 2));
++				}
++				return null;
++			});
++		}
++		jassProgramVisitor.getJassNativeManager().createNative("FlushStoredMission",
++				(arguments, globalScope, triggerScope) -> {
++					final GameCache cache = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++					if (cache != null) {
++						cache.flushMission(str(arguments, 1));
++					}
++					return null;
++				});
++		jassProgramVisitor.getJassNativeManager().createNative("FlushGameCache",
++				(arguments, globalScope, triggerScope) -> {
++					final GameCache cache = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++					if (cache != null) {
++						cache.flushAll();
++					}
++					return null;
++				});
++		// Синхронизация кэша между игроками: в lockstep все клиенты и так считают одно и то же.
++		for (final String sync : new String[] { "SyncStoredInteger", "SyncStoredReal", "SyncStoredBoolean",
++				"SyncStoredString", "SyncStoredUnit" }) {
++			jassProgramVisitor.getJassNativeManager().createNative(sync, (arguments, globalScope, triggerScope) -> null);
++		}
++	}
++
++	private static Object stored(final List<JassValue> arguments) {
++		final GameCache cache = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++		return cache == null ? null : cache.get(str(arguments, 1), str(arguments, 2));
++	}
++
++	private static <T> void registerStore(final JassProgram jassProgramVisitor, final String name,
++			final JassValueVisitor<T> valueVisitor) {
++		jassProgramVisitor.getJassNativeManager().createNative(name, (arguments, globalScope, triggerScope) -> {
++			final GameCache cache = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++			if (cache != null) {
++				final Object value = arg(arguments, 3, valueVisitor);
++				cache.put(str(arguments, 1), str(arguments, 2), value);
++			}
++			return null;
++		});
++	}
++
++	private static void registerHave(final JassProgram jassProgramVisitor, final String name, final Class<?> type) {
++		jassProgramVisitor.getJassNativeManager().createNative(name, (arguments, globalScope, triggerScope) -> {
++			final GameCache cache = arg(arguments, 0, ObjectJassValueVisitor.getInstance());
++			return BooleanJassValue.of((cache != null) && cache.has(str(arguments, 1), str(arguments, 2), type));
++		});
++	}
++}
+diff --git a/core/src/com/etheller/warsmash/parsers/jass/Jass2.java b/core/src/com/etheller/warsmash/parsers/jass/Jass2.java
+index fbc709b4..43e20687 100644
+--- a/core/src/com/etheller/warsmash/parsers/jass/Jass2.java
++++ b/core/src/com/etheller/warsmash/parsers/jass/Jass2.java
+@@ -1078,6 +1078,14 @@ public class Jass2 {
+ 			// TODO if BuildOrderById is actually different from PointOrderById then this
+ 			// needs to be fixed:
+ 			jassProgramVisitor.getJassNativeManager().createNative("IssueBuildOrderById", issuePointOrderById);
++			// Flomaster: строковый вариант — тот же приказ по id из строки
++			jassProgramVisitor.getJassNativeManager().createNative("IssuePointOrder",
++					(arguments, globalScope, triggerScope) -> {
++						final java.util.List<JassValue> byId = new java.util.ArrayList<>(arguments);
++						byId.set(1, IntegerJassValue.of(OrderIdUtils
++								.getOrderId(arguments.get(1).visit(StringJassValueVisitor.getInstance()))));
++						return issuePointOrderById.call(byId, globalScope, triggerScope);
++					});
+ 			jassProgramVisitor.getJassNativeManager().createNative("IssueTargetOrder",
+ 					(arguments, globalScope, triggerScope) -> {
+ 						final CUnit whichUnit = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
+@@ -9180,6 +9188,8 @@ public class Jass2 {
+ 			jassProgramVisitor.getJassNativeManager().createNative("FourCC", string2Rawcode);
+ 
+ 			registerRandomNatives(jassProgramVisitor, this.simulation);
++			// Flomaster: нативки, нужные пользовательским картам (DotA и др.), — см. FlomasterNatives
++			FlomasterNatives.register(jassProgramVisitor, this.simulation, unitType, eventType, gamecacheType);
+ 		}
+ 
+ 		private static void registerAbilityUserDataHandleNatives(final JassProgram jassProgramVisitor,
+diff --git a/core/src/com/etheller/warsmash/parsers/jass/scope/CommonTriggerExecutionScope.java b/core/src/com/etheller/warsmash/parsers/jass/scope/CommonTriggerExecutionScope.java
+index be0edadd..1a147687 100644
+--- a/core/src/com/etheller/warsmash/parsers/jass/scope/CommonTriggerExecutionScope.java
++++ b/core/src/com/etheller/warsmash/parsers/jass/scope/CommonTriggerExecutionScope.java
+@@ -95,6 +95,10 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
+ 
+ 	private JassGameEventsWar3 triggerEventId;
+ 
++	// Flomaster: чат игрока (EVENT_PLAYER_CHAT)
++	private String chatString;
++	private String chatStringMatched;
++
+ 	public CommonTriggerExecutionScope(final Trigger triggeringTrigger) {
+ 		super(triggeringTrigger);
+ 	}
+@@ -172,6 +176,40 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
+ 		this.enumFilePath = parentScope.enumFilePath;
+ 		this.triggerLocalStore = parentScope.triggerLocalStore;
+ 		this.triggerEventId = parentScope.triggerEventId;
++		this.chatString = parentScope.chatString;
++		this.chatStringMatched = parentScope.chatStringMatched;
++	}
++
++	public String getChatString() {
++		return this.chatString;
++	}
++
++	public String getChatStringMatched() {
++		return this.chatStringMatched;
++	}
++
++	/** Flomaster: магазин продал юнита (EVENT_UNIT_SELL / EVENT_PLAYER_UNIT_SELL). */
++	public static CommonTriggerExecutionScope unitSellScope(final JassGameEventsWar3 triggerEventId,
++			final Trigger trigger, final CUnit sellingUnit, final CUnit soldUnit, final CUnit buyingUnit) {
++		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
++		scope.triggerWidget = sellingUnit;
++		scope.triggeringUnit = sellingUnit;
++		scope.sellingUnit = sellingUnit;
++		scope.soldUnit = soldUnit;
++		scope.buyingUnit = buyingUnit;
++		scope.triggerEventId = triggerEventId;
++		return scope;
++	}
++
++	/** Flomaster: игрок написал в чат (EVENT_PLAYER_CHAT). */
++	public static CommonTriggerExecutionScope playerChatScope(final JassGameEventsWar3 triggerEventId,
++			final Trigger trigger, final CPlayerJass player, final String chatString, final String chatStringMatched) {
++		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
++		scope.triggeringPlayer = player;
++		scope.triggerEventId = triggerEventId;
++		scope.chatString = chatString;
++		scope.chatStringMatched = chatStringMatched;
++		return scope;
+ 	}
+ 
+ 	public CUnit getEnumUnit() {
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/rendersim/commandbuttons/CommandCardPopulatingAbilityVisitor.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/rendersim/commandbuttons/CommandCardPopulatingAbilityVisitor.java
+index 5e115d57..9e5d8f04 100644
+--- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/rendersim/commandbuttons/CommandCardPopulatingAbilityVisitor.java
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/rendersim/commandbuttons/CommandCardPopulatingAbilityVisitor.java
+@@ -608,6 +608,21 @@ public class CommandCardPopulatingAbilityVisitor implements CAbilityVisitor<Void
+ 
+ 	@Override
+ 	public Void accept(final CAbilitySellItems ability) {
++		if ((this.menuBaseOrderId == 0) && ability.isIconShowing() && ability.isSellsUnits()) {
++			// Flomaster: таверна — кнопки юнитов/героев
++			int unitIndex = 1;
++			for (final War3ID unitType : ability.getItemsSold()) {
++				final IconUI unitUI = this.abilityDataUI.getUnitUI(unitType);
++				final CUnitType simulationUnitType = this.game.getUnitData().getUnitType(unitType);
++				if ((unitUI != null) && (simulationUnitType != null)) {
++					addCommandButton(ability, unitUI, ability.getHandleId(), this.localPlayerIndex | (unitIndex << 8),
++							0, false, false, simulationUnitType.getGoldCost(), simulationUnitType.getLumberCost(),
++							simulationUnitType.getFoodUsed(), 0, -1);
++				}
++				unitIndex++;
++			}
++			return null;
++		}
+ 		if ((this.menuBaseOrderId == 0) && ability.isIconShowing()) {
+ 			int itemIndex = 1;
+ 			for (final War3ID unitType : ability.getItemsSold()) {
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/CUnit.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/CUnit.java
+index 1437e29c..12ef177e 100644
+--- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/CUnit.java
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/CUnit.java
+@@ -3558,6 +3558,77 @@ public class CUnit extends CWidget {
+ 		this.unitAnimationListener.playAnimation(true, PrimaryTag.STAND, SequenceUtils.EMPTY, 0.0f, true);
+ 	}
+ 
++	// ---------------------------------------------------------------------
++	// Flomaster: возможности, которых не хватает картам вроде DotA Allstars
++	// ---------------------------------------------------------------------
++
++	/**
++	 * Нативка ReviveHero: воскрешает мёртвого героя в точке (x, y) с полными жизнями и маной, как это
++	 * делает алтарь, но без очереди и оплаты. Возвращает false, если юнит не мёртвый герой.
++	 */
++	public boolean flomasterReviveHero(final CSimulation game, final float x, final float y,
++			final boolean doEyecandy) {
++		if (!isDead() || !this.unitType.isHero()) {
++			return false;
++		}
++		final CAbilityHero heroData = getHeroData();
++		if (heroData != null) {
++			heroData.setReviving(false);
++			heroData.setAwaitingRevive(false);
++		}
++		game.getWorldCollision().removeUnit(this);
++		this.corpse = false;
++		this.boneCorpse = false;
++		this.deathTurnTick = 0;
++		this.explodesOnDeath = false;
++		this.explodesOnDeathBuffId = null;
++		setX(x);
++		setY(y);
++		game.getWorldCollision().addUnit(this);
++		setPoint(x, y, game.getWorldCollision(), game.getRegionManager());
++		setHidden(false);
++		setLife(game, getMaximumLife());
++		setMana(getMaximumMana());
++		setFoodUsed(this.unitType.getFoodUsed());
++		game.getPlayer(this.playerIndex).setUnitFoodMade(this, this.unitType.getFoodMade());
++		setPointAndCheckUnstuck(x, y, game);
++		game.unitRepositioned(this);
++		game.heroReviveEvent(this, this);
++		this.unitAnimationListener.playAnimation(true, PrimaryTag.STAND, SequenceUtils.EMPTY, 0.0f, true);
++		return true;
++	}
++
++	/** Нативка UnitResetCooldown: сбрасывает перезарядку всех способностей юнита. */
++	public void flomasterResetCooldowns() {
++		this.rawcodeToCooldownExpireTime.clear();
++		this.rawcodeToCooldownStartTime.clear();
++		fireCooldownsChangedEvent();
++	}
++
++	/**
++	 * Магазин (этот юнит) продаёт юнита: создаёт его рядом для игрока playerIndex и запускает события
++	 * EVENT_UNIT_SELL (на магазине) и EVENT_PLAYER_UNIT_SELL (у владельца магазина).
++	 */
++	public CUnit flomasterSellUnit(final CSimulation game, final int playerIndex, final War3ID soldTypeId,
++			final CUnit buyingUnit) {
++		final CUnit soldUnit = game.createUnitSimple(soldTypeId, playerIndex, getX(), getY(),
++				game.getGameplayConstants().getBuildingAngle());
++		if (soldUnit == null) {
++			return null;
++		}
++		soldUnit.nudgeAround(game, this);
++		game.unitRepositioned(soldUnit);
++		final List<CWidgetEvent> eventList = getEventList(JassGameEventsWar3.EVENT_UNIT_SELL);
++		if (eventList != null) {
++			for (final CWidgetEvent event : eventList) {
++				event.fire(this, CommonTriggerExecutionScope.unitSellScope(JassGameEventsWar3.EVENT_UNIT_SELL,
++						event.getTrigger(), this, soldUnit, buyingUnit));
++			}
++		}
++		game.getPlayer(this.playerIndex).flomasterFireSellEvents(this, soldUnit, buyingUnit);
++		return soldUnit;
++	}
++
+ 	private static final class AutocastTargetFinderEnum implements CUnitEnumFunction {
+ 		private final static BooleanAbilityTargetCheckReceiver<CWidget> targetCheckReceiver = BooleanAbilityTargetCheckReceiver
+ 				.<CWidget>getInstance();
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/CUnitType.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/CUnitType.java
+index f08fca8a..c14ab00a 100644
+--- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/CUnitType.java
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/CUnitType.java
+@@ -371,6 +371,17 @@ public class CUnitType {
+ 		return this.upgradesTo;
+ 	}
+ 
++	// Flomaster: юниты, которые продаёт магазин/таверна (поле Sellunits)
++	private List<War3ID> unitsSold = java.util.Collections.emptyList();
++
++	public List<War3ID> getUnitsSold() {
++		return this.unitsSold;
++	}
++
++	public void setUnitsSold(final List<War3ID> unitsSold) {
++		this.unitsSold = unitsSold;
++	}
++
+ 	public List<War3ID> getItemsSold() {
+ 		return this.itemsSold;
+ 	}
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/abilities/item/shop/CAbilitySellItems.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/abilities/item/shop/CAbilitySellItems.java
+index 30edd5d3..f9067fbe 100644
+--- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/abilities/item/shop/CAbilitySellItems.java
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/abilities/item/shop/CAbilitySellItems.java
+@@ -24,10 +24,25 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.CommandStringE
+ 
+ public final class CAbilitySellItems extends AbstractCAbility {
+ 	private final List<War3ID> itemsSold;
++	// Flomaster: тот же механизм магазина продаёт юнитов (таверны, наёмники) — поле Sellunits
++	private final boolean sellsUnits;
+ 
+ 	public CAbilitySellItems(final int handleId, final List<War3ID> itemsSold) {
+-		super(handleId, War3ID.fromString("Asei"));
++		this(handleId, itemsSold, false);
++	}
++
++	private CAbilitySellItems(final int handleId, final List<War3ID> itemsSold, final boolean sellsUnits) {
++		super(handleId, War3ID.fromString(sellsUnits ? "Asud" : "Asei"));
+ 		this.itemsSold = new ArrayList<>(itemsSold);
++		this.sellsUnits = sellsUnits;
++	}
++
++	public static CAbilitySellItems sellingUnits(final int handleId, final List<War3ID> unitsSold) {
++		return new CAbilitySellItems(handleId, unitsSold, true);
++	}
++
++	public boolean isSellsUnits() {
++		return this.sellsUnits;
+ 	}
+ 
+ 	public List<War3ID> getItemsSold() {
+@@ -39,7 +54,23 @@ public final class CAbilitySellItems extends AbstractCAbility {
+ 			final AbilityActivationReceiver receiver) {
+ 		final int playerIndex = orderId & 0xFF; // TODO this is stupid, and should be passed as some "acting player" arg
+ 		final int itemIndex = ((orderId & 0xFF00) >> 8) - 1;
+-		if ((itemIndex >= 0) && (itemIndex < this.itemsSold.size())) {
++		if (this.sellsUnits && (itemIndex >= 0) && (itemIndex < this.itemsSold.size())) {
++			final CUnitType soldType = game.getUnitData().getUnitType(this.itemsSold.get(itemIndex));
++			final CPlayer player = game.getPlayer(playerIndex);
++			if (soldType == null) {
++				receiver.useOk();
++			}
++			else if (player.getGold() < soldType.getGoldCost()) {
++				receiver.activationCheckFailed(CommandStringErrorKeys.NOT_ENOUGH_GOLD);
++			}
++			else if (player.getLumber() < soldType.getLumberCost()) {
++				receiver.activationCheckFailed(CommandStringErrorKeys.NOT_ENOUGH_LUMBER);
++			}
++			else {
++				receiver.useOk();
++			}
++		}
++		else if ((itemIndex >= 0) && (itemIndex < this.itemsSold.size())) {
+ 			final War3ID itemTypeId = this.itemsSold.get(itemIndex);
+ 			final CItemType itemType = game.getItemData().getItemType(itemTypeId);
+ 			if (itemType != null) {
+@@ -126,6 +157,19 @@ public final class CAbilitySellItems extends AbstractCAbility {
+ 		final int playerIndex = orderId & 0xFF; // TODO this is stupid, and should be passed as some "acting player" arg
+ 		final int itemIndex = ((orderId & 0xFF00) >> 8) - 1;
+ 		final CAbilityNeutralBuilding neutralBuildingData = caster.getNeutralBuildingData();
++		if (this.sellsUnits) {
++			if ((itemIndex >= 0) && (itemIndex < this.itemsSold.size())) {
++				final War3ID soldTypeId = this.itemsSold.get(itemIndex);
++				final CUnitType soldType = game.getUnitData().getUnitType(soldTypeId);
++				if ((soldType != null)
++						&& game.getPlayer(playerIndex).charge(soldType.getGoldCost(), soldType.getLumberCost())) {
++					final CUnit buyingUnit = neutralBuildingData == null ? null
++							: neutralBuildingData.getSelectedPlayerUnit(playerIndex);
++					caster.flomasterSellUnit(game, playerIndex, soldTypeId, buyingUnit);
++				}
++			}
++			return null;
++		}
+ 		if ((itemIndex >= 0) && (itemIndex < this.itemsSold.size())) {
+ 			final War3ID itemTypeId = this.itemsSold.get(itemIndex);
+ 			final CItemType itemType = game.getItemData().getItemType(itemTypeId);
+@@ -162,7 +206,7 @@ public final class CAbilitySellItems extends AbstractCAbility {
+ 		// NOTE: this method not actually used, because CAbilityQueue is not Aliased
+ 		final CUnitType unitType = cUnit.getUnitType();
+ 		this.itemsSold.clear();
+-		this.itemsSold.addAll(unitType.getItemsSold());
++		this.itemsSold.addAll(this.sellsUnits ? unitType.getUnitsSold() : unitType.getItemsSold());
+ 	}
+ 
+ 	@Override
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/abilities/skills/flomaster/CAbilityChannel.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/abilities/skills/flomaster/CAbilityChannel.java
+new file mode 100644
+index 00000000..2c6e04d4
+--- /dev/null
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/abilities/skills/flomaster/CAbilityChannel.java
+@@ -0,0 +1,176 @@
++package com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.flomaster;
++
++import com.etheller.warsmash.units.GameObject;
++import com.etheller.warsmash.util.War3ID;
++import com.etheller.warsmash.util.WarsmashConstants;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWidget;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.CAbilitySpellBase;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.definitions.impl.AbilityFields;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.skills.CBehaviorNoTargetSpellBase;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.skills.CBehaviorTargetSpellBase;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIdUtils;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityTargetCheckReceiver;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.CommandStringErrorKeys;
++
++/**
++ * Flomaster: способность Channel (ANcl) вместо тестовой заглушки upstream.
++ *
++ * Channel — «пустая» способность, на которой карты строят свои заклинания: сама она ничего не делает,
++ * а триггеры карты реагируют на события заклинания (EVENT_*_SPELL_CHANNEL/CAST/EFFECT/FINISH/ENDCAST,
++ * их запускают CBehavior*SpellBase). Поля редактора:
++ * <ul>
++ * <li>DataA — Follow Through Time: сколько секунд юнит продолжает «каналить» после эффекта;</li>
++ * <li>DataB — Target Type: 0 — без цели, 1 — юнит, 2 — точка, 3 — юнит или точка;</li>
++ * <li>DataC — Options (флаги): 1 — значок виден, 2 — область, 4 — физическое, 8 — универсальное, 16 — уникальное;</li>
++ * <li>DataD — Art Duration (не используется: эффекты рисует карта);</li>
++ * <li>DataE — Disable Other Abilities (пока не поддерживается);</li>
++ * <li>DataF — Base Order ID: строка приказа, под которой способность принимает приказы.</li>
++ * </ul>
++ */
++public class CAbilityChannel extends CAbilitySpellBase {
++	public static final int TARGET_NONE = 0;
++	public static final int TARGET_UNIT = 1;
++	public static final int TARGET_POINT = 2;
++	public static final int TARGET_UNIT_OR_POINT = 3;
++
++	private static final int OPTION_VISIBLE = 1;
++	private static final int OPTION_AREA = 2;
++	private static final int OPTION_PHYSICAL = 4;
++	private static final int OPTION_UNIVERSAL = 8;
++
++	private float followThroughTime;
++	private int targetType = TARGET_NONE;
++	private int options = OPTION_VISIBLE;
++	private int baseOrderId = OrderIds.channel;
++	private float areaOfEffect;
++	private int channelStartTick;
++
++	private CBehaviorNoTargetSpellBase noTargetBehavior;
++	private CBehaviorTargetSpellBase targetBehavior;
++
++	public CAbilityChannel(final int handleId, final War3ID alias) {
++		super(handleId, alias);
++	}
++
++	@Override
++	public void populateData(final GameObject worldEditorAbility, final int level) {
++		this.followThroughTime = worldEditorAbility.getFieldAsFloat(AbilityFields.DATA_A + level, 0);
++		this.targetType = worldEditorAbility.getFieldAsInteger(AbilityFields.DATA_B + level, 0);
++		this.options = worldEditorAbility.getFieldAsInteger(AbilityFields.DATA_C + level, 0);
++		this.areaOfEffect = worldEditorAbility.getFieldAsFloat(AbilityFields.AREA_OF_EFFECT + level, 0);
++		final String orderString = worldEditorAbility.getFieldAsString(AbilityFields.DATA_F + level, 0);
++		int orderId = 0;
++		if ((orderString != null) && !orderString.isEmpty() && !"_".equals(orderString)) {
++			orderId = OrderIdUtils.getOrderId(orderString.trim());
++		}
++		this.baseOrderId = orderId != 0 ? orderId : OrderIds.channel;
++		setIconShowing((this.options & OPTION_VISIBLE) != 0);
++	}
++
++	@Override
++	public void onAdd(final CSimulation game, final CUnit unit) {
++		this.noTargetBehavior = new CBehaviorNoTargetSpellBase(unit, this);
++		this.targetBehavior = new CBehaviorTargetSpellBase(unit, this);
++	}
++
++	@Override
++	public int getBaseOrderId() {
++		return this.baseOrderId;
++	}
++
++	@Override
++	public float getUIAreaOfEffect() {
++		if (((this.options & OPTION_AREA) != 0) && (this.areaOfEffect > 0)) {
++			return this.areaOfEffect;
++		}
++		return Float.NaN;
++	}
++
++	@Override
++	public boolean isPhysical() {
++		return (this.options & OPTION_PHYSICAL) != 0;
++	}
++
++	@Override
++	public boolean isUniversal() {
++		return (this.options & OPTION_UNIVERSAL) != 0;
++	}
++
++	@Override
++	public boolean doEffect(final CSimulation simulation, final CUnit caster, final AbilityTarget target) {
++		// Сам эффект — забота триггеров карты (они ловят EVENT_*_SPELL_EFFECT).
++		this.channelStartTick = simulation.getGameTurnTick();
++		return this.followThroughTime > 0;
++	}
++
++	@Override
++	public boolean doChannelTick(final CSimulation simulation, final CUnit caster, final AbilityTarget target) {
++		final int ticks = simulation.getGameTurnTick() - this.channelStartTick;
++		return ticks < (int) (this.followThroughTime / WarsmashConstants.SIMULATION_STEP_TIME);
++	}
++
++	@Override
++	public CBehavior begin(final CSimulation game, final CUnit caster, final int orderId, final CWidget target) {
++		return this.targetBehavior.reset(game, target);
++	}
++
++	@Override
++	public CBehavior begin(final CSimulation game, final CUnit caster, final int orderId,
++			final AbilityPointTarget point) {
++		return this.targetBehavior.reset(game, point);
++	}
++
++	@Override
++	public CBehavior beginNoTarget(final CSimulation game, final CUnit caster, final int orderId) {
++		return this.noTargetBehavior.reset();
++	}
++
++	@Override
++	protected void innerCheckCanTarget(final CSimulation game, final CUnit unit, final int orderId,
++			final CWidget target, final AbilityTargetCheckReceiver<CWidget> receiver) {
++		if ((this.targetType != TARGET_UNIT) && (this.targetType != TARGET_UNIT_OR_POINT)) {
++			receiver.orderIdNotAccepted();
++			return;
++		}
++		if (target.canBeTargetedBy(game, unit, getTargetsAllowed(), receiver)) {
++			if (!unit.isMovementDisabled() || unit.canReach(target, getCastRange())) {
++				receiver.targetOk(target);
++			}
++			else {
++				receiver.targetCheckFailed(CommandStringErrorKeys.TARGET_IS_OUTSIDE_RANGE);
++			}
++		}
++	}
++
++	@Override
++	protected void innerCheckCanTarget(final CSimulation game, final CUnit unit, final int orderId,
++			final AbilityPointTarget target, final AbilityTargetCheckReceiver<AbilityPointTarget> receiver) {
++		if ((this.targetType != TARGET_POINT) && (this.targetType != TARGET_UNIT_OR_POINT)) {
++			receiver.orderIdNotAccepted();
++			return;
++		}
++		if (!unit.isMovementDisabled() || unit.canReach(target, getCastRange())) {
++			receiver.targetOk(target);
++		}
++		else {
++			receiver.targetCheckFailed(CommandStringErrorKeys.TARGET_IS_OUTSIDE_RANGE);
++		}
++	}
++
++	@Override
++	protected void innerCheckCanTargetNoTarget(final CSimulation game, final CUnit unit, final int orderId,
++			final AbilityTargetCheckReceiver<Void> receiver) {
++		if (this.targetType == TARGET_NONE) {
++			receiver.targetOk(null);
++		}
++		else {
++			receiver.orderIdNotAccepted();
++		}
++	}
++}
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/behaviors/skills/CBehaviorNoTargetSpellBase.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/behaviors/skills/CBehaviorNoTargetSpellBase.java
+index 8f7791a5..d07e362d 100644
+--- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/behaviors/skills/CBehaviorNoTargetSpellBase.java
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/behaviors/skills/CBehaviorNoTargetSpellBase.java
+@@ -7,12 +7,16 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.CA
+ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior;
+ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehaviorCategory;
+ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehaviorVisitor;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.JassGameEventsWar3;
+ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.CommandStringErrorKeys;
+ 
+ public class CBehaviorNoTargetSpellBase implements CBehavior {
+ 	protected final CUnit unit;
+ 	protected final CAbilitySpellBase ability;
+ 	private int castStartTick = 0;
++	// Flomaster: события заклинания для триггеров (CHANNEL, CAST, EFFECT, FINISH, ENDCAST)
++	private boolean spellEventsStarted = false;
++	private boolean spellEventsEnded = false;
+ 	private boolean doneEffect = false;
+ 	private boolean channeling = true;
+ 
+@@ -25,6 +29,8 @@ public class CBehaviorNoTargetSpellBase implements CBehavior {
+ 		this.castStartTick = 0;
+ 		this.doneEffect = false;
+ 		this.channeling = true;
++		this.spellEventsStarted = false;
++		this.spellEventsEnded = false;
+ 		return this;
+ 	}
+ 
+@@ -35,6 +41,11 @@ public class CBehaviorNoTargetSpellBase implements CBehavior {
+ 		if (this.castStartTick == 0) {
+ 			this.castStartTick = simulation.getGameTurnTick();
+ 		}
++		if (!this.spellEventsStarted) {
++			this.spellEventsStarted = true;
++			this.unit.fireSpellEvents(simulation, JassGameEventsWar3.EVENT_UNIT_SPELL_CHANNEL, this.ability, null);
++			this.unit.fireSpellEvents(simulation, JassGameEventsWar3.EVENT_UNIT_SPELL_CAST, this.ability, null);
++		}
+ 		final int ticksSinceCast = simulation.getGameTurnTick() - this.castStartTick;
+ 		final int castPointTicks = (int) (this.unit.getUnitType().getCastPoint()
+ 				/ WarsmashConstants.SIMULATION_STEP_TIME);
+@@ -47,9 +58,11 @@ public class CBehaviorNoTargetSpellBase implements CBehavior {
+ 				this.doneEffect = true;
+ 				if (!this.unit.chargeMana(this.ability.getManaCost())) {
+ 					simulation.getCommandErrorListener().showInterfaceError(this.unit.getPlayerIndex(), CommandStringErrorKeys.NOT_ENOUGH_MANA);
++					flomasterEndSpellEvents(simulation, false);
+ 					return this.unit.pollNextOrderBehavior(simulation);
+ 				}
+ 				this.unit.beginCooldown(simulation, this.ability.getCode(), this.ability.getCooldown());
++				this.unit.fireSpellEvents(simulation, JassGameEventsWar3.EVENT_UNIT_SPELL_EFFECT, this.ability, null);
+ 				this.channeling = this.ability.doEffect(simulation, this.unit, null);
+ 				if (this.channeling) {
+ 					simulation.unitLoopSoundEffectEvent(this.unit, this.ability.getAlias());
+@@ -63,6 +76,7 @@ public class CBehaviorNoTargetSpellBase implements CBehavior {
+ 			}
+ 		}
+ 		if ((ticksSinceCast >= backswingTicks) && !this.channeling) {
++			flomasterEndSpellEvents(simulation, this.doneEffect);
+ 			return this.unit.pollNextOrderBehavior(simulation);
+ 		}
+ 		return this;
+@@ -74,6 +88,18 @@ public class CBehaviorNoTargetSpellBase implements CBehavior {
+ 
+ 	@Override
+ 	public void end(final CSimulation game, final boolean interrupted) {
++		flomasterEndSpellEvents(game, false);
++	}
++
++	/** Flomaster: FINISH (если заклинание завершилось) и ENDCAST — по одному разу. */
++	private void flomasterEndSpellEvents(final CSimulation game, final boolean finished) {
++		if (this.spellEventsStarted && !this.spellEventsEnded) {
++			this.spellEventsEnded = true;
++			if (finished) {
++				this.unit.fireSpellEvents(game, JassGameEventsWar3.EVENT_UNIT_SPELL_FINISH, this.ability, null);
++			}
++			this.unit.fireSpellEvents(game, JassGameEventsWar3.EVENT_UNIT_SPELL_ENDCAST, this.ability, null);
++		}
+ 	}
+ 
+ 	@Override
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/behaviors/skills/CBehaviorTargetSpellBase.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/behaviors/skills/CBehaviorTargetSpellBase.java
+index dcafa919..7496f5ac 100644
+--- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/behaviors/skills/CBehaviorTargetSpellBase.java
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/behaviors/skills/CBehaviorTargetSpellBase.java
+@@ -10,12 +10,16 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
+ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CAbstractRangedBehavior;
+ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior;
+ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehaviorCategory;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.JassGameEventsWar3;
+ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.CommandStringErrorKeys;
+ 
+ public class CBehaviorTargetSpellBase extends CAbstractRangedBehavior {
+ 	protected final CAbilitySpellBase ability;
+ 	private final AbilityTargetStillAliveAndTargetableVisitor stillAliveVisitor;
+ 	private int castStartTick = 0;
++	// Flomaster: события заклинания для триггеров (CHANNEL, CAST, EFFECT, FINISH, ENDCAST)
++	private boolean spellEventsStarted = false;
++	private boolean spellEventsEnded = false;
+ 	private boolean doneEffect = false;
+ 	private boolean channeling = false;
+ 
+@@ -29,6 +33,8 @@ public class CBehaviorTargetSpellBase extends CAbstractRangedBehavior {
+ 		this.castStartTick = 0;
+ 		this.doneEffect = false;
+ 		this.channeling = false;
++		this.spellEventsStarted = false;
++		this.spellEventsEnded = false;
+ 		return innerReset(game, target, false);
+ 	}
+ 
+@@ -36,6 +42,8 @@ public class CBehaviorTargetSpellBase extends CAbstractRangedBehavior {
+ 		this.castStartTick = 0;
+ 		this.doneEffect = false;
+ 		this.channeling = false;
++		this.spellEventsStarted = false;
++		this.spellEventsEnded = false;
+ 		return innerReset(game, target, false);
+ 	}
+ 
+@@ -55,6 +63,11 @@ public class CBehaviorTargetSpellBase extends CAbstractRangedBehavior {
+ 		if (this.castStartTick == 0) {
+ 			this.castStartTick = simulation.getGameTurnTick();
+ 		}
++		if (!this.spellEventsStarted) {
++			this.spellEventsStarted = true;
++			this.unit.fireSpellEvents(simulation, JassGameEventsWar3.EVENT_UNIT_SPELL_CHANNEL, this.ability, this.target);
++			this.unit.fireSpellEvents(simulation, JassGameEventsWar3.EVENT_UNIT_SPELL_CAST, this.ability, this.target);
++		}
+ 		final int ticksSinceCast = simulation.getGameTurnTick() - this.castStartTick;
+ 		final int castPointTicks =
+ 				(int) (this.unit.getUnitType().getCastPoint() / WarsmashConstants.SIMULATION_STEP_TIME);
+@@ -68,9 +81,11 @@ public class CBehaviorTargetSpellBase extends CAbstractRangedBehavior {
+ 				if (!this.unit.chargeMana(this.ability.getManaCost())) {
+ 					simulation.getCommandErrorListener().showInterfaceError(this.unit.getPlayerIndex(),
+ 							CommandStringErrorKeys.NOT_ENOUGH_MANA);
++					flomasterEndSpellEvents(simulation, false);
+ 					return this.unit.pollNextOrderBehavior(simulation);
+ 				}
+ 				this.unit.beginCooldown(simulation, this.ability.getCode(), this.ability.getCooldown());
++				this.unit.fireSpellEvents(simulation, JassGameEventsWar3.EVENT_UNIT_SPELL_EFFECT, this.ability, this.target);
+ 				this.channeling = this.ability.doEffect(simulation, this.unit, this.target);
+ 				if (this.channeling) {
+ 					simulation.unitLoopSoundEffectEvent(this.unit, this.ability.getAlias());
+@@ -85,6 +100,7 @@ public class CBehaviorTargetSpellBase extends CAbstractRangedBehavior {
+ 			}
+ 		}
+ 		if ((ticksSinceCast >= backswingTicks) && !this.channeling) {
++			flomasterEndSpellEvents(simulation, this.doneEffect);
+ 			return this.unit.pollNextOrderBehavior(simulation);
+ 		}
+ 		return this;
+@@ -129,6 +145,18 @@ public class CBehaviorTargetSpellBase extends CAbstractRangedBehavior {
+ 			this.channeling = false;
+ 			endChannel(game, interrupted);
+ 		}
++		flomasterEndSpellEvents(game, false);
++	}
++
++	/** Flomaster: FINISH (если заклинание завершилось) и ENDCAST — по одному разу. */
++	private void flomasterEndSpellEvents(final CSimulation game, final boolean finished) {
++		if (this.spellEventsStarted && !this.spellEventsEnded) {
++			this.spellEventsEnded = true;
++			if (finished) {
++				this.unit.fireSpellEvents(game, JassGameEventsWar3.EVENT_UNIT_SPELL_FINISH, this.ability, this.target);
++			}
++			this.unit.fireSpellEvents(game, JassGameEventsWar3.EVENT_UNIT_SPELL_ENDCAST, this.ability, this.target);
++		}
+ 	}
+ 
+ 	private void endChannel(CSimulation game, boolean interrupted) {
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/data/CAbilityData.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/data/CAbilityData.java
+index f2537248..78edeb2d 100644
+--- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/data/CAbilityData.java
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/data/CAbilityData.java
+@@ -228,7 +228,10 @@ public class CAbilityData {
+ 		this.codeToAbilityTypeDefinition.put(War3ID.fromString("Ahar"), new CAbilityTypeDefinitionHarvest());
+ 		this.codeToAbilityTypeDefinition.put(War3ID.fromString("Awha"), new CAbilityTypeDefinitionWispHarvest());
+ 		this.codeToAbilityTypeDefinition.put(War3ID.fromString("Ahrl"), new CAbilityTypeDefinitionHarvestLumber());
+-		this.codeToAbilityTypeDefinition.put(War3ID.fromString("ANcl"), new CAbilityTypeDefinitionChannelTest());
++		// Flomaster: настоящий Channel (цели, Base Order ID, события заклинания) вместо тестовой заглушки
++		this.codeToAbilityTypeDefinition.put(War3ID.fromString("ANcl"), new CAbilityTypeDefinitionSpellBase(
++				(handleId, alias) -> new com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.flomaster.CAbilityChannel(
++						handleId, alias)));
+ 		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AUcs"), new CAbilityTypeDefinitionCarrionSwarmDummy());
+ 		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AInv"), new CAbilityTypeDefinitionInventory());
+ 		this.codeToAbilityTypeDefinition.put(War3ID.fromString("Arep"), new CAbilityTypeDefinitionHumanRepair());
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/data/CUnitData.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/data/CUnitData.java
+index 3e5e0e5d..2c50e640 100644
+--- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/data/CUnitData.java
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/data/CUnitData.java
+@@ -170,6 +170,7 @@ public class CUnitData {
+ 	private static final String UPGRADES_TO = "Upgrade"; // replaced from 'uupt'
+ 	private static final String ITEMS_SOLD = "Sellitems"; // replaced from 'usei'
+ 	private static final String ITEMS_MADE = "Makeitems"; // replaced from 'umki'
++	private static final String UNITS_SOLD = "Sellunits"; // replaced from 'useu' (Flomaster)
+ 	private static final String REVIVES_HEROES = "Revive"; // replaced from 'urev'
+ 	private static final String UNIT_RACE = "race"; // replaced from 'urac'
+ 
+@@ -347,6 +348,11 @@ public class CUnitData {
+ 		if (!itemsMade.isEmpty()) {
+ 			unit.add(simulation, new CAbilitySellItems(handleIdAllocator.createId(), itemsMade));
+ 		}
++		if (!unitTypeInstance.getUnitsSold().isEmpty()) {
++			// Flomaster: таверны и наёмники — продажа юнитов
++			unit.add(simulation, CAbilitySellItems.sellingUnits(handleIdAllocator.createId(),
++					unitTypeInstance.getUnitsSold()));
++		}
+ 		if (unitTypeInstance.isRevivesHeroes()) {
+ 			unit.add(simulation, new CAbilityReviveHero(handleIdAllocator.createId()));
+ 		}
+@@ -451,6 +457,11 @@ public class CUnitData {
+ 		if (!itemsMade.isEmpty()) {
+ 			unit.add(simulation, new CAbilitySellItems(handleIdAllocator.createId(), itemsMade));
+ 		}
++		if (!unitTypeInstance.getUnitsSold().isEmpty()) {
++			// Flomaster: таверны и наёмники — продажа юнитов
++			unit.add(simulation, CAbilitySellItems.sellingUnits(handleIdAllocator.createId(),
++					unitTypeInstance.getUnitsSold()));
++		}
+ 		if (unitTypeInstance.isRevivesHeroes()) {
+ 			unit.add(simulation, new CAbilityReviveHero(handleIdAllocator.createId()));
+ 		}
+@@ -793,6 +804,7 @@ public class CUnitData {
+ 					extendedLineOfSight, goldBountyAwardedBase, goldBountyAwardedDice, goldBountyAwardedSides,
+ 					lumberBountyAwardedBase, lumberBountyAwardedDice, lumberBountyAwardedSides,
+ 					neutralBuildingShowMinimapIcon);
++			unitTypeInstance.setUnitsSold(parseIDList(unitType.getFieldAsList(UNITS_SOLD)));
+ 			this.unitIdToUnitType.put(typeId, unitTypeInstance);
+ 			this.jassLegacyNameToUnitId.put(legacyName, typeId);
+ 		}
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/players/CPlayer.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/players/CPlayer.java
+index f7d0a09f..2ad60850 100644
+--- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/players/CPlayer.java
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/players/CPlayer.java
+@@ -420,6 +420,38 @@ public class CPlayer extends CBasePlayer {
+ 		}
+ 	}
+ 
++	/** Flomaster: EVENT_PLAYER_UNIT_SELL — юнит этого игрока продал юнита. */
++	public void flomasterFireSellEvents(final CUnit sellingUnit, final CUnit soldUnit, final CUnit buyingUnit) {
++		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_UNIT_SELL);
++		if (eventList != null) {
++			for (final CPlayerEvent event : eventList) {
++				event.fire(sellingUnit, CommonTriggerExecutionScope.unitSellScope(
++						JassGameEventsWar3.EVENT_PLAYER_UNIT_SELL, event.getTrigger(), sellingUnit, soldUnit,
++						buyingUnit));
++			}
++		}
++	}
++
++	/**
++	 * Flomaster: EVENT_PLAYER_CHAT — игрок написал в чат. Подписки — {@link FlomasterChatEvent}
++	 * (TriggerRegisterPlayerChatEvent): точное совпадение или вхождение строки, пустая строка — любое сообщение.
++	 */
++	public void flomasterFireChatEvents(final String message) {
++		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_CHAT);
++		if (eventList == null) {
++			return;
++		}
++		for (final CPlayerEvent event : new java.util.ArrayList<>(eventList)) {
++			if (event instanceof FlomasterChatEvent) {
++				final FlomasterChatEvent chatEvent = (FlomasterChatEvent) event;
++				if (chatEvent.matches(message)) {
++					event.fire(this, CommonTriggerExecutionScope.playerChatScope(JassGameEventsWar3.EVENT_PLAYER_CHAT,
++							event.getTrigger(), this, message, chatEvent.getMatchString()));
++				}
++			}
++		}
++	}
++
+ 	public void fireTrainFinishEvents(final CUnit unit, final CSimulation game, final CUnit trainedUnit) {
+ 		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_UNIT_TRAIN_FINISH);
+ 		if (eventList != null) {
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/players/CPlayerUnitOrderExecutor.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/players/CPlayerUnitOrderExecutor.java
+index 742848c6..6d261bc0 100644
+--- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/players/CPlayerUnitOrderExecutor.java
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/players/CPlayerUnitOrderExecutor.java
+@@ -126,9 +126,19 @@ public class CPlayerUnitOrderExecutor implements CPlayerUnitOrderListener {
+ 		}
+ 	}
+ 
++	// Flomaster: сообщения чата приходят как серия GUI-событий (FlomasterChatCodec)
++	private final com.etheller.warsmash.viewer5.handlers.w3x.ui.FlomasterChatCodec.Decoder chatDecoder = new com.etheller.warsmash.viewer5.handlers.w3x.ui.FlomasterChatCodec.Decoder();
++
+ 	@Override
+ 	public void issueGuiPlayerEvent(final int eventId) {
+ 		final CPlayer player = this.game.getPlayer(playerIndex);
++		if (com.etheller.warsmash.viewer5.handlers.w3x.ui.FlomasterChatCodec.isChatEvent(eventId)) {
++			final String message = this.chatDecoder.accept(eventId);
++			if (message != null) {
++				player.flomasterFireChatEvents(message);
++			}
++			return;
++		}
+ 		final JassGameEventsWar3 eventType = JassGameEventsWar3.getByEventId(eventId);
+ 		if (eventType != null) {
+ 			player.firePlayerEvents(CommonTriggerExecutionScope::guiPlayerEventTriggerScope, eventType);
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/players/FlomasterChatEvent.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/players/FlomasterChatEvent.java
+new file mode 100644
+index 00000000..0ca160a4
+--- /dev/null
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/players/FlomasterChatEvent.java
+@@ -0,0 +1,39 @@
++package com.etheller.warsmash.viewer5.handlers.w3x.simulation.players;
++
++import com.etheller.interpreter.ast.scope.GlobalScope;
++import com.etheller.interpreter.ast.scope.trigger.Trigger;
++import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.JassGameEventsWar3;
++
++/**
++ * Flomaster: подписка TriggerRegisterPlayerChatEvent. Как в Warcraft III: при exactMatchOnly сообщение
++ * должно совпасть со строкой целиком, иначе — содержать её (без учёта регистра); пустая строка
++ * означает «любое сообщение».
++ */
++public class FlomasterChatEvent extends CPlayerEvent {
++	private final String matchString;
++	private final boolean exactMatchOnly;
++
++	public FlomasterChatEvent(final GlobalScope globalScope, final CPlayerJass player, final Trigger trigger,
++			final String matchString, final boolean exactMatchOnly) {
++		super(globalScope, player, trigger, JassGameEventsWar3.EVENT_PLAYER_CHAT, null);
++		this.matchString = matchString == null ? "" : matchString;
++		this.exactMatchOnly = exactMatchOnly;
++	}
++
++	public String getMatchString() {
++		return this.matchString;
++	}
++
++	public boolean matches(final String message) {
++		if (message == null) {
++			return false;
++		}
++		if (this.matchString.isEmpty()) {
++			return true;
++		}
++		if (this.exactMatchOnly) {
++			return message.equalsIgnoreCase(this.matchString);
++		}
++		return message.toLowerCase().contains(this.matchString.toLowerCase());
++	}
++}
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/FlomasterChatCodec.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/FlomasterChatCodec.java
+new file mode 100644
+index 00000000..81ddbcd5
+--- /dev/null
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/FlomasterChatCodec.java
+@@ -0,0 +1,61 @@
++package com.etheller.warsmash.viewer5.handlers.w3x.ui;
++
++/**
++ * Flomaster: сообщение чата как последовательность GUI-событий (int), чтобы не менять сетевой протокол
++ * Warsmash. Код события: MARKER | (тип << 16) | значение. Тип 0 — начало, 1 — символ (UTF-16), 2 — конец.
++ * Значения MARKER не пересекаются с id событий JassGameEventsWar3 (они меньше 1000).
++ */
++public final class FlomasterChatCodec {
++	public static final int MAX_LENGTH = 127;
++	private static final int MARKER = 0x7A000000;
++	private static final int MASK = 0xFF000000;
++	private static final int BEGIN = 0;
++	private static final int CHAR = 1;
++	private static final int END = 2;
++
++	private FlomasterChatCodec() {
++	}
++
++	public static int[] encode(final String text) {
++		final int[] out = new int[text.length() + 2];
++		out[0] = MARKER | (BEGIN << 16);
++		for (int i = 0; i < text.length(); i++) {
++			out[i + 1] = MARKER | (CHAR << 16) | (text.charAt(i) & 0xFFFF);
++		}
++		out[out.length - 1] = MARKER | (END << 16);
++		return out;
++	}
++
++	public static boolean isChatEvent(final int eventId) {
++		return (eventId & MASK) == MARKER;
++	}
++
++	/** Сборщик для одного игрока: возвращает готовое сообщение на событии «конец», иначе null. */
++	public static final class Decoder {
++		private final StringBuilder buffer = new StringBuilder();
++		private boolean active;
++
++		public String accept(final int eventId) {
++			final int type = (eventId >> 16) & 0xFF;
++			switch (type) {
++			case BEGIN:
++				this.buffer.setLength(0);
++				this.active = true;
++				return null;
++			case CHAR:
++				if (this.active && (this.buffer.length() < MAX_LENGTH)) {
++					this.buffer.append((char) (eventId & 0xFFFF));
++				}
++				return null;
++			case END:
++				if (!this.active) {
++					return null;
++				}
++				this.active = false;
++				return this.buffer.toString();
++			default:
++				return null;
++			}
++		}
++	}
++}
+diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/MeleeUI.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/MeleeUI.java
+index cdeca033..2ae5357c 100644
+--- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/MeleeUI.java
++++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/MeleeUI.java
+@@ -442,6 +442,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
+ 		this.rootFrameListener = rootFrameListener;
+ 		this.unitOrderListener = unitOrderListener;
+ 		this.exitGameRunnable = exitGameRunnable;
++		flomasterActive = this;
+ 
+ 		this.cameraManager = new GameCameraManager(cameraPresets, cameraRates);
+ 
+@@ -5148,6 +5149,27 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
+ 		return new CTimerDialog(timer, timerDialog, valueFrame, titleFrame);
+ 	}
+ 
++	/** Flomaster: текущий интерфейс игры — сюда веб-оболочка передаёт сообщения чата. */
++	public static volatile MeleeUI flomasterActive;
++
++	/**
++	 * Flomaster: отправить сообщение чата от локального игрока. Сообщение идёт тем же упорядоченным по
++	 * ходам каналом, что и GUI-события (issueGuiPlayerEvent), поэтому у всех игроков триггеры карты
++	 * (TriggerRegisterPlayerChatEvent) срабатывают в один и тот же ход — lockstep не рассинхронизируется.
++	 */
++	public void flomasterSendChat(final String message) {
++		if ((message == null) || message.trim().isEmpty()) {
++			return;
++		}
++		final String text = message.length() > FlomasterChatCodec.MAX_LENGTH
++				? message.substring(0, FlomasterChatCodec.MAX_LENGTH)
++				: message;
++		for (final int eventId : FlomasterChatCodec.encode(text)) {
++			this.unitOrderListener.issueGuiPlayerEvent(eventId);
++		}
++		displayTimedText(0, 0, 8, this.localPlayer.getName() + ": " + text);
++	}
++
+ 	@Override
+ 	public void displayTimedText(final float x, final float y, final float duration, final String message) {
+ 		showGameMessage(message, duration); // TODO x y
+diff --git a/html/src/com/etheller/warsmash/html/engineworker/EngineWorkerMain.java b/html/src/com/etheller/warsmash/html/engineworker/EngineWorkerMain.java
+index 7e8602c2..eb675dc2 100644
+--- a/html/src/com/etheller/warsmash/html/engineworker/EngineWorkerMain.java
++++ b/html/src/com/etheller/warsmash/html/engineworker/EngineWorkerMain.java
+@@ -460,6 +460,7 @@ public final class EngineWorkerMain {
+ 					+ "  if (d.kind === 'key')     { if (self.__onKey)     self.__onKey(d.name, d.keycode|0, d.ch || ''); return; }"
+ 					+ "  if (d.kind === 'scroll')  { if (self.__onScroll)  self.__onScroll(+d.dx, +d.dy); return; }"
+ 					+ "  if (d.kind === 'resize')  { if (self.__onResize)  self.__onResize(d.cssWidth|0, d.cssHeight|0, d.pixelWidth|0, d.pixelHeight|0); return; }"
++					+ "  if (d.kind === 'chat')    { if (self.__onChat)    self.__onChat(String(d.text || '')); return; }"
+ 					+ "});")
+ 	private static native void registerInitHandler(InitCallback cb);
+ 
+@@ -483,6 +484,13 @@ public final class EngineWorkerMain {
+ 		});
+ 		setOnScroll((dx, dy) -> input.postScroll(dx, dy));
+ 		setOnResize(EngineWorkerMain::handleResize);
++		// Flomaster: чат из поля ввода страницы → игра (выполняется в цикле движка)
++		setOnChat(text -> Gdx.app.postRunnable(() -> {
++			final com.etheller.warsmash.viewer5.handlers.w3x.ui.MeleeUI ui = com.etheller.warsmash.viewer5.handlers.w3x.ui.MeleeUI.flomasterActive;
++			if (ui != null) {
++				ui.flomasterSendChat(text);
++			}
++		}));
+ 	}
+ 
+ 	/**
+@@ -530,6 +538,14 @@ public final class EngineWorkerMain {
+ 	@JSBody(params = { "fn" }, script = "self.__onScroll = fn;")
+ 	private static native void setOnScroll(ScrollHandler fn);
+ 
++	@JSBody(params = { "fn" }, script = "self.__onChat = fn;")
++	private static native void setOnChat(ChatHandler fn);
++
++	@org.teavm.jso.JSFunctor
++	interface ChatHandler extends JSObject {
++		void accept(String text);
++	}
++
+ 	@org.teavm.jso.JSFunctor
+ 	interface PointerHandler extends JSObject {
+ 		void accept(String name, int x, int y, int button);
+diff --git a/html/web-src/src/lib/engineBoot.ts b/html/web-src/src/lib/engineBoot.ts
+index 0ee9e83d..5a4a64ac 100644
+--- a/html/web-src/src/lib/engineBoot.ts
++++ b/html/web-src/src/lib/engineBoot.ts
+@@ -92,9 +92,11 @@ export function bootEngineWorker(opts: BootOptions): EngineHandle {
+         // never see the WC3 main menu flash. Splash drops once the
+         // engine reaches WarsmashGdxMapScreen (the actual game).
+         if (m.indexOf('setScreen(WarsmashGdxMapScreen)') !== -1) {
++          inMap = true; // Flomaster: чат по Enter — только в самой игре
+           onMapReached?.();
+         }
+         else if (m.indexOf('setScreen(WarsmashGdxMenuScreen)') !== -1) {
++          inMap = false;
+           onMenuReady?.();
+         }
+         // Don't log the mass of engine console output to the page console;
+@@ -131,6 +133,9 @@ export function bootEngineWorker(opts: BootOptions): EngineHandle {
+   return handle;
+ }
+ 
++/** Flomaster: движок сейчас на карте (а не в меню) — тогда Enter открывает чат. */
++let inMap = false;
++
+ function wireInput(canvas: HTMLCanvasElement, worker: Worker): void {
+   function relayPointer(name: 'down' | 'up' | 'move', e: PointerEvent): void {
+     const rect = canvas.getBoundingClientRect();
+@@ -159,14 +164,69 @@ function wireInput(canvas: HTMLCanvasElement, worker: Worker): void {
+     worker.postMessage({ kind: 'scroll', dx: e.deltaX, dy: e.deltaY });
+     e.preventDefault();
+   }, { passive: false });
++  const chat = createChatBox(worker);
+   window.addEventListener('keydown', (e) => {
++    if (chat.isOpen()) return; // Flomaster: пока набирается сообщение, клавиши в игру не идут
++    if (inMap && e.key === 'Enter' && !e.repeat && !e.altKey && !e.ctrlKey && !e.metaKey) {
++      e.preventDefault();
++      chat.open();
++      return;
++    }
+     worker.postMessage({ kind: 'key', name: 'down', keycode: domKeyToGdx(e), ch: e.key.length === 1 ? e.key : '' });
+   });
+   window.addEventListener('keyup', (e) => {
++    if (chat.isOpen()) return;
+     worker.postMessage({ kind: 'key', name: 'up', keycode: domKeyToGdx(e), ch: '' });
+   });
+ }
+ 
++/**
++ * Flomaster: поле чата поверх игры. Enter — открыть, Enter — отправить, Esc — закрыть.
++ * Сообщение уходит в движок ({ kind: 'chat' }), а он рассылает его игрокам через lockstep —
++ * так карты получают команды вроде «-ap» (TriggerRegisterPlayerChatEvent).
++ */
++function createChatBox(worker: Worker): { open(): void; isOpen(): boolean } {
++  const input = document.createElement('input');
++  input.type = 'text';
++  input.maxLength = 127;
++  input.autocomplete = 'off';
++  input.spellcheck = false;
++  input.setAttribute('aria-label', 'Chat');
++  input.style.cssText = 'position:fixed;left:50%;bottom:22%;transform:translateX(-50%);width:min(560px,80vw);'
++    + 'z-index:300;display:none;padding:6px 10px;font:15px system-ui,sans-serif;color:#fff;'
++    + 'background:rgba(0,0,0,.72);border:1px solid #c8a84a;border-radius:4px;outline:none;';
++  document.body.appendChild(input);
++  let open = false;
++  const close = (): void => {
++    open = false;
++    input.value = '';
++    input.style.display = 'none';
++    input.blur();
++  };
++  input.addEventListener('keydown', (e) => {
++    e.stopPropagation();
++    if (e.key === 'Enter') {
++      e.preventDefault();
++      const text = input.value.trim();
++      if (text) worker.postMessage({ kind: 'chat', text });
++      close();
++    } else if (e.key === 'Escape') {
++      e.preventDefault();
++      close();
++    }
++  });
++  input.addEventListener('keyup', (e) => e.stopPropagation());
++  input.addEventListener('blur', () => { if (open) close(); });
++  return {
++    open(): void {
++      open = true;
++      input.style.display = 'block';
++      input.focus();
++    },
++    isOpen: () => open,
++  };
++}
++
+ function wireResize(canvas: HTMLCanvasElement, worker: Worker): void {
+   // Debounced window-resize → propagate to worker. The CSS rules
+   // already reflow the canvas DOM box (4:3 cap on 100vw/100vh);

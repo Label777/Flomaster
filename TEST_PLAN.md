@@ -157,8 +157,9 @@
 
 ### T-14. `scripts/check-no-valve-files.sh` — R-LEGAL
 
-1. `scripts/check-no-valve-files.sh` на чистом клоне. Ожидается: «OK: файлов игры Valve в репозитории нет».
+1. `scripts/check-no-valve-files.sh` на чистом клоне. Ожидается: «OK: файлов игр в репозитории нет».
 2. Негативная проверка во временной ветке: `mkdir -p x/cstrike && touch x/cstrike/a.txt liblist.gam test.bsp && git add -f . && scripts/check-no-valve-files.sh`. Ожидается: код 1, перечислены все три файла. Затем `git reset --hard && git clean -fdx x liblist.gam test.bsp`.
+3. То же для Warcraft III: `mkdir -p "x/Warcraft III" x/Maps && touch "x/Warcraft III/a.txt" x/Maps/b.txt War3.mpq dota.w3x unit.mdx && git add -f . && scripts/check-no-valve-files.sh`. Ожидается: код 1, перечислены все пять файлов. Затем `git reset --hard && git clean -fdx x War3.mpq dota.w3x unit.mdx`.
 
 ### T-15. `scripts/verify-upstream.sh` — сверка протокола — R-NET (блокер)
 
@@ -193,12 +194,14 @@
 
 | Задача | Что делает | Покрывает |
 |---|---|---|
-| `guard` | `scripts/check-no-valve-files.sh`: в `git ls-files` нет `.bsp .wad .mdl .spr .pak .gcf .wav .mp3 .res .gam .dem .sav .nav .zip .pk3` и файлов внутри каталогов `valve/` и `cstrike/` | R-LEGAL |
+| `guard` | `scripts/check-no-valve-files.sh`: в `git ls-files` нет `.bsp .wad .mdl .spr .pak .gcf .wav .mp3 .res .gam .dem .sav .nav .zip .pk3` (Valve), `.mpq .casc .w3x .w3m .w3n .w3g .blp .mdx` (Warcraft III) и файлов внутри каталогов `valve/`, `cstrike/`, `Warcraft III/`, `Maps/` | R-LEGAL |
 | `web` | `npm ci` (или `npm install`, пока нет lock-файла) → `npm run typecheck` (`tsc --noEmit`) → `npm run build` (`tsc` + `vite build` + `scripts/postbuild.mjs`: `LICENSE.txt`, `THIRD_PARTY_NOTICES.txt`, `.br`/`.gz`) → артефакт `web-dist` | R-DEPLOY, R-LEGAL (атрибуция) |
 | `api` | `npm run check` (`node --check` всех модулей) → `npm test` (`node --test`: разбор A2S/Xash info/RCON, конфигурация, TURN REST HMAC, rate limiter, интеграционный тест HTTP + UDP-заглушка сервера) | R-NET (статус), R-TURN |
 | `compose` | `docker compose config -q` для основного файла и оверлея steamcmd; `scripts/deploy.sh --render-only` с тестовыми значениями; проверка отрендеренных `turnserver.conf` и `server.cfg` | R-DEPLOY |
 | `images` | `docker buildx build` образов `web` (Caddy + статика, контекст — корень репозитория) и `api` | R-DEPLOY |
 | `shellcheck` | `shellcheck -x -P scripts scripts/*.sh` | R-DEPLOY |
+
+`.github/workflows/wc3-engine.yml` — проверочная сборка веб-порта Warsmash (Warcraft III) с нашими патчами: `scripts/build-wc3.sh` на JDK 17 и Node 22, артефакт `wc3-warsmash` на 7 дней в раскладке сайта (`games/wc3/`). Запускается вручную и при изменении скрипта или `vendor-patches/wc3/`. После сборки — дымовой тест `web/scripts/smoke-wc3.mjs`: headless Chromium, заголовки как у Caddy, страницы `/games/wc3/`, запуск движка без файлов игры; падает на 404 от нашего origin, ошибках JS, отсутствии изоляции/OffscreenCanvas/OPFS или если движок не загрузил свои файлы из базы. Сайт собирает Warsmash сам — в `pages.yml` и в образе `web` (задача `images` в CI это проверяет).
 
 `.github/workflows/deploy.yml` — ручной деплой (workflow_dispatch) по SSH: `git pull --ff-only && scripts/deploy.sh [--pin]`. Не тест, но после него нужно пройти T-12 п. 5.
 
@@ -240,3 +243,101 @@
 | T-18 | | | | | |
 
 **Критерии готовности к запуску:** T-01…T-12, T-14…T-16 пройдены во всех указанных браузерах. Блокеры — T-05/T-06 (протокол сигналинга) и T-15.
+
+## 5. Warcraft III — чек-лист ручной проверки
+
+Warcraft III на сайте работает на движке Warsmash (KNOWN_ISSUES, раздел G). W-01…W-06 проверяют сам движок и DotA (по исходникам DotA неиграбельна — прогон подтверждает или опровергает выводы), W-07…W-10 — встраивание в сайт. Результат каждого шага записать в таблицу в конце раздела, а расхождения с разделом G — в сам раздел G.
+
+**Нужно:** настольный Chrome или Edge (последний, 64-бит); копия Warcraft III: The Frozen Throne **1.26a** (классическая установка с `War3.mpq`, `War3x.mpq`, `War3xLocal.mpq`, `War3Patch.mpq`, у локализованных версий ещё `War3Local.mpq`); своя копия карты `DotA v6.83d.w3x`; Python 3.
+
+### W-01. Сборка
+
+1. GitHub → Actions → `wc3-engine` → последний запуск зелёный (или Run workflow).
+2. Скачать артефакт `wc3-warsmash`, распаковать. В `games/wc3/BUILD-INFO.txt` — коммит `d69e772b…`, патч `0001-flomaster-subpath-art-signaling.patch`, «Удалено из сборки: goblin-tinker.webp bg.png», путь `/games/wc3/`.
+3. В корне распакованного каталога: `python3 -m http.server 8000`, открыть `http://127.0.0.1:8000/games/wc3/` (localhost — безопасный контекст, OPFS работает).
+
+**Ожидается:** главная Warsmash с тремя плитками (Play, Multiplayer, Manage assets). В DevTools → Network все файлы движка (`engine-worker-boot.js`, `_astro/…`, `CHANGELOG.md`) грузятся из `/games/wc3/`, нет 404 на `/engine-worker-boot.js` в корне.
+
+### W-02. Файлы игры
+
+1. Manage assets → Select Warcraft III folder → папка Warcraft III (браузер спросит про «загрузку» — файлы никуда не уходят).
+2. Записать: время до готовности, сколько файлов и МБ показал staging, объём OPFS (DevTools → Application → Storage).
+3. DevTools → Network: нет запросов с телом размером с MPQ.
+4. Перезагрузить страницу, снова Play — повторной распаковки быть не должно (маркер `.w3-ready`).
+
+### W-03. Мили 1×1 офлайн
+
+Play → Single Player → Custom Game → двухигровая мили-карта из стандартных (например `(2)EchoIsles`) → Start.
+
+**Записать:** время загрузки, FPS (на глаз или DevTools → Rendering → FPS meter), строительство и найм, бой, звук, правый клик (приказы), есть ли компьютерный противник (ожидание по исходникам — нет).
+
+### W-04. DotA 6.83d: загрузка
+
+1. Manage assets → Maps → добавить `DotA v6.83d.w3x` (попадёт в `/w3/Maps/Upload/`). Или заранее положить карту в `Maps/` своей папки Warcraft III и выбрать папку заново.
+2. Custom Game → выбрать DotA → Start. Включить в DevTools → Console «Preserve log».
+
+**Записать:** загрузилась ли, за сколько секунд; первые ошибки и предупреждения (`Save as…` в консоли), особенно про нативки.
+
+### W-05. DotA: выбор героя, крипы, способности, смерть, магазины
+
+Патч `vendor-patches/wc3/0003` добавил механики, без которых DotA не играется (KNOWN_ISSUES п. 43–49). Этот тест показывает, хватает ли их. Чат: на карте нажать Enter, ввести текст, Enter — отправить, Esc — закрыть.
+
+| Шаг | Что сделать | Ожидание после патча 0003 |
+|---|---|---|
+| a | Хост в первые секунды вводит в чат `-ap` (или `-ar`) | карта пишет режим игры на экране |
+| b | Выделить таверну рядом со стартовым юнитом, нажать кнопку героя | золото списывается, герой появляется у таверны, стартовый юнит исчезает (это делает триггер карты по событию продажи) |
+| c | Подождать ~1,5 минуты игрового времени | волны крипов выходят и идут по линиям |
+| d | Прокачать и применить все способности 2–3 героев (с целью-юнитом, с целью-точкой, без цели) | эффект способности срабатывает; записать, какие не сработали |
+| e | Умереть (от крипов или башни), подождать | герой воскресает у фонтана через время, зависящее от уровня (таймера на экране нет — п. 45) |
+| f | Купить 2–3 предмета, собрать простой рецепт | предметы покупаются, рецепт собирается |
+| g | Табло справа | табло нет (multiboard не реализован, п. 49) |
+| h | То же на двоих (W-06) | у обоих одинаковые события, нет окна рассинхронизации |
+
+В консоли (DevTools) искать строки про нереализованные нативки — их список пригодится для следующего патча.
+
+### W-06. Онлайн на двоих по коду
+
+1. Окно 1 (Chrome): Multiplayer → имя → Host → записать код лобби.
+2. Окно 2 (другой профиль Chrome или другой компьютер): Multiplayer → Join by code.
+3. Хост выбирает мили-карту → Start. Играть 5 минут.
+
+**Записать:** соединились ли, задержка приказов, появлялось ли окно рассинхронизации. 10 игроков — по возможности, отдельной строкой.
+
+### W-07. Сайт: карточка и встроенный плеер
+
+1. Сайт на VPS (`https://[ДОМЕН]/`): каталог → «Warcraft III: The Frozen Throne» — обложка (крепость с флажком, без арта Blizzard), бейджи «Свои файлы игры», «Онлайн P2P», «Бета», ссылка «Как подготовить файлы» → `#/wc3`.
+2. «Играть» → `#/g/wc3/play`: во фрейме открывается главная Warsmash. Пройти W-02 и W-03 внутри фрейма.
+3. Правый клик в игре отдаёт приказы и не открывает меню браузера. «Во весь экран» плеера работает, Esc выходит.
+4. DevTools → Console фрейма: `crossOriginIsolated` — `true`; ошибок COEP/CORP (`ERR_BLOCKED_BY_RESPONSE`) нет.
+5. `curl -sI https://[ДОМЕН]/games/wc3/app.js | grep -i cache-control` → `no-cache`.
+
+### W-08. Повторный заход
+
+Закрыть вкладку, открыть снова `#/g/wc3/play` → Play. **Ожидается:** папку выбирать не нужно, распаковки нет (файлы в OPFS сохранились — фрейм не `credentialless`).
+
+### W-09. GitHub Pages (подкаталог)
+
+1. После push в `main` — `pages` зелёный, в логе шаг «Warcraft III — сборка Warsmash».
+2. `https://<владелец>.github.io/<репозиторий>/#/g/wc3/play`: первая загрузка — одна перезагрузка (service worker), затем W-07 п. 2–4. Файлы движка — из `/<репозиторий>/games/wc3/`.
+3. W-06 (сеть на двоих) с Pages.
+
+### W-10. Свой сигналинг (необязательно)
+
+1. На VPS: в `.env` `WC3_SIGNALING_DB_PASSWORD` и `VITE_WC3_SIGNALING=wss://[ДОМЕН]/wc3-signaling/v0/signaling`, `docker compose -f docker-compose.yml -f docker-compose.wc3-signaling.yml up -d --build`.
+2. `curl -s https://[ДОМЕН]/wc3-signaling/health` — ответ сервера, не 502.
+3. W-06 на VPS: в DevTools → Network → WS соединение идёт к `/wc3-signaling/v0/signaling`, не к `netlib.poki.io`. В `games/wc3/BUILD-INFO.txt` — этот адрес.
+
+### Протокол
+
+| Тест | Результат | Дата, кто | Замечания |
+|---|---|---|---|
+| W-01 | | | |
+| W-02 | | | |
+| W-03 | | | |
+| W-04 | | | |
+| W-05 a–h | | | |
+| W-06 | | | |
+| W-07 | | | |
+| W-08 | | | |
+| W-09 | | | |
+| W-10 | | | |

@@ -1,0 +1,85 @@
+diff --git a/html/web-src/astro.config.mjs b/html/web-src/astro.config.mjs
+index ed4dcfc7..54dfeaf5 100644
+--- a/html/web-src/astro.config.mjs
++++ b/html/web-src/astro.config.mjs
+@@ -14,7 +14,10 @@ import preact from '@astrojs/preact';
+ // the legacy webapp-src/ copy step.
+ export default defineConfig({
+   output: 'static',
+-  base: './',
++  // Flomaster: сайт кладёт сборку в подкаталог (`/games/wc3/` или
++  // `/<repo>/games/wc3/` на GitHub Pages). WARSMASH_BASE задаёт его при
++  // сборке; versionedAsset() берёт его из import.meta.env.BASE_URL.
++  base: process.env.WARSMASH_BASE || './',
+   build: {
+     // Don't add hash suffixes to public assets — the engine worker
+     // bootstrap and TeaVM @JSBody calls reference fixed filenames
+diff --git a/html/web-src/src/components/Splash.astro b/html/web-src/src/components/Splash.astro
+index 5dffe82f..7b1362df 100644
+--- a/html/web-src/src/components/Splash.astro
++++ b/html/web-src/src/components/Splash.astro
+@@ -7,11 +7,10 @@
+  * Visibility is driven imperatively from EnginePage (`document.getElementById('splash').style.display = ...`)
+  * so engine-boot callbacks can hide it without poking at the Preact tree.
+  */
+-import { versionedAsset } from '../lib/version';
+-const splashImgUrl = versionedAsset('goblin-tinker.webp');
++// Flomaster: без goblin-tinker.webp — это рендер модели из Warcraft III
++// (арт Blizzard), сайт его не раздаёт.
+ ---
+ <div id="splash">
+-  <img id="splash-img" alt="" src={splashImgUrl} />
+   <div class="label">Initializing</div>
+ </div>
+ 
+diff --git a/html/web-src/src/lib/poki-bridge.ts b/html/web-src/src/lib/poki-bridge.ts
+index a1e9c235..0fe989dd 100644
+--- a/html/web-src/src/lib/poki-bridge.ts
++++ b/html/web-src/src/lib/poki-bridge.ts
+@@ -96,7 +96,10 @@ export function pokiBridgeInit (gameId: string, callbacks: BridgeCallbacks): boo
+   cb.signalingreconnected = callbacks.signalingreconnected ?? cb.signalingreconnected
+ 
+   try {
+-    net = new Network(gameId)
++    // Flomaster: свой сервер сигналинга задаётся при сборке (PUBLIC_WC3_SIGNALING),
++    // иначе — сервер Poki по умолчанию (адрес — третий аргумент конструктора).
++    const signalingURL = (import.meta.env.PUBLIC_WC3_SIGNALING as string | undefined)?.trim()
++    net = signalingURL ? new Network(gameId, undefined, signalingURL) : new Network(gameId)
+   } catch (e) {
+     console.error('[poki-bridge] Network constructor threw:', e)
+     return false
+diff --git a/html/web-src/src/lib/version.ts b/html/web-src/src/lib/version.ts
+index 9876a74c..39cd507c 100644
+--- a/html/web-src/src/lib/version.ts
++++ b/html/web-src/src/lib/version.ts
+@@ -21,6 +21,14 @@ export const BUILD_ID = String(Date.now());
+  *  live at the top level of webapp/ regardless of which route is
+  *  referencing them. */
+ export function versionedAsset(path: string): string {
+-  const cleaned = path.startsWith('/') ? path : '/' + path;
+-  return `${cleaned}?v=${encodeURIComponent(BUILD_ID)}`;
++  const cleaned = path.replace(/^\/+/, '');
++  return `${siteRoot()}${cleaned}?v=${encodeURIComponent(BUILD_ID)}`;
++}
++
++/** Flomaster: корень сборки — absolute base из astro.config (WARSMASH_BASE),
++ *  а без него, как в upstream, корень домена. */
++function siteRoot(): string {
++  const base = import.meta.env.BASE_URL || '/';
++  if (!base.startsWith('/')) return '/';
++  return base.endsWith('/') ? base : base + '/';
+ }
+diff --git a/html/web-src/src/styles/global.css b/html/web-src/src/styles/global.css
+index 23ac550f..5b616ef5 100644
+--- a/html/web-src/src/styles/global.css
++++ b/html/web-src/src/styles/global.css
+@@ -118,7 +118,8 @@ body.engine-page {
+   width: 100vw;
+   height: 100vh;
+   height: 100dvh;
+-  background: #000 url('/bg.png') center/cover no-repeat;
++  /* Flomaster: без картинки bg.png (происхождение не сверено) */
++  background: radial-gradient(ellipse at center, #1b2233 0%, #07090f 75%);
+   touch-action: none;
+ }
+ #canvas {

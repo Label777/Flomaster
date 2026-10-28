@@ -170,3 +170,38 @@ TURN: coturn в режиме `use-auth-secret`. API выдаёт учётки п
 3. Агент «Сервер и DevOps»: `api/`, `deploy/`, `docker-compose*.yml`, `scripts/`, CI.
 4. QA-агент: независимая проверка, `KNOWN_ISSUES.md`, тест-план.
 5. Оркестратор: приёмка, README, финальная сборка.
+
+## 11. Warcraft III (Warsmash)
+
+Вторая игра со своими файлами игрока — Warcraft III: The Frozen Throne на движке [Warsmash](https://github.com/ErikSom/WarsmashModEngine/tree/d69e772b4dede6fd3569f9949a3180cdfea4635b): открытая реимплементация движка WC3 на Java (LibGDX), собранная TeaVM в JavaScript, с сайтом-оболочкой на Astro + Preact. Ограничения (DotA не играбельна, нет ИИ) — KNOWN_ISSUES, раздел G.
+
+```
+ Браузер игрока                                          Сборка (pages.yml / web/Dockerfile)
+ ┌───────────────────────────────────────────────┐      ┌──────────────────────────────────────────┐
+ │ сайт: #/g/wc3/play → <iframe games/wc3/>        │      │ scripts/build-wc3.sh                     │
+ │  ┌───────── Warsmash (Astro + Preact) ───────┐ │      │  git fetch ErikSom/…@d69e772b (хеш)       │
+ │  │ Manage assets: <input webkitdirectory>    │ │      │  + vendor-patches/wc3/*.patch            │
+ │  │   → .mpq в OPFS (/w3, /extracted)         │ │      │  ./gradlew :html:buildWeb (JDK 17, TeaVM) │
+ │  │ engine-worker.js: движок в воркере,       │ │      │  − арт upstream, проверка на файлы игры  │
+ │  │   OffscreenCanvas + WebGL                 │ │      │  → web/public/games/wc3/ + BUILD-INFO    │
+ │  │ сеть: @poki/netlib (WebRTC P2P, lockstep) │ │      └──────────────────────────────────────────┘
+ │  └──────────────┬────────────────────────────┘ │
+ └─────────────────┼──────────────────────────────┘
+                   │ WebSocket сигналинга (только знакомство игроков)
+                   ▼
+   wss://netlib.poki.io (по умолчанию) или наш wc3-signaling (docker-compose.wc3-signaling.yml)
+```
+
+| Что | Где |
+|---|---|
+| Закреплённый коммит, патчи, проверки сборки | `scripts/build-wc3.sh`, `vendor-patches/wc3/` |
+| Сборка под путь сайта (`VITE_BASE` → `<база>games/wc3/`) | `web/scripts/fetch-wc3.mjs` (`npm run fetch:wc3`) |
+| Сборка на Pages / в образе / проверочная | `.github/workflows/pages.yml`, `web/Dockerfile` (стадия `wc3`, `WITH_WC3`), `.github/workflows/wc3-engine.yml` |
+| Карточка, плеер, инструкция | `web/src/catalog/games.ts` (`wc3`), `web/src/pages/game-page.ts`, `web/src/pages/wc3-guide.ts` (`#/wc3`) |
+| Свой сигналинг | `docker-compose.wc3-signaling.yml`, маршрут `/wc3-signaling/*` в `deploy/caddy/Caddyfile`, `VITE_WC3_SIGNALING` |
+
+Наши патчи Warsmash (`vendor-patches/wc3/`, накладываются по порядку): `0001` — работа из подкаталога сайта, без арта Blizzard, свой сигналинг; `0002` — без ненадёжного `maven.nikr.net`; `0003` — механики для пользовательских карт вроде DotA: продажа героев в тавернах, чат (поле на странице → GUI-события lockstep → `TriggerRegisterPlayerChatEvent`), настоящий Channel, события заклинаний, `ReviveHero` и др. (KNOWN_ISSUES, п. 43–49, 62). Новый код в Warsmash — в отдельных файлах с префиксом `Flomaster` и в методах `flomaster*`, чтобы патч было проще переносить на новые коммиты upstream.
+
+Юридическая граница та же, что у CS 1.6: файлы игры и карты выбирает игрок, они лежат в OPFS его браузера и никуда не отправляются; сайт раздаёт только код движка. Лицензии: код сайта — MIT, Warsmash — AGPL-3.0 отдельной сборкой (наш TypeScript его не импортирует); ссылка на исходник точного коммита и наши патчи — на страницах `#/wc3` и `#/licenses` и в `games/wc3/BUILD-INFO.txt`.
+
+Изоляция: Warsmash не нужен `SharedArrayBuffer`, все его файлы с того же origin, поэтому COOP/COEP сайта (Caddy, `coi-sw.js` на Pages — его scope `BASE_URL` покрывает `games/wc3/`) ему не мешают. Фрейм своей игры грузится без `credentialless`, иначе у него было бы временное хранилище и OPFS терялся бы.

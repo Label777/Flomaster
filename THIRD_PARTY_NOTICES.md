@@ -1,6 +1,6 @@
 # THIRD_PARTY_NOTICES
 
-Сторонние компоненты, которые сайт «CS 1.6 в браузере» раздаёт браузерам, запускает на сервере или использует при сборке. Собственный код репозитория — MIT, см. [LICENSE](LICENSE).
+Сторонние компоненты, которые сайт (Counter-Strike 1.6, Warcraft III и другие игры каталога) раздаёт браузерам, запускает на сервере или использует при сборке. Собственный код репозитория — MIT, см. [LICENSE](LICENSE).
 
 Этот файл при сборке копируется в `dist/THIRD_PARTY_NOTICES.txt` и показывается на странице «Лицензии» (`#/licenses`).
 
@@ -26,6 +26,25 @@
 
 Шрифты, иконки и изображения со стороны не используются: шрифты системные, знак сайта и `favicon.svg` нарисованы для проекта.
 
+## 1a. Warcraft III: движок Warsmash и его зависимости
+
+Сборка лежит в `dist/games/wc3/` (собирается `scripts/build-wc3.sh`, в git не попадает) и скачивается браузером игрока. Наш TypeScript её не импортирует: код сайта остаётся под MIT, Warsmash — отдельная программа под AGPL-3.0. В сборку кладутся `BUILD-INFO.txt` (коммит, наши патчи с SHA-256) и `LICENSE-Warsmash.txt`.
+
+| Компонент | Версия | Upstream | Лицензия | Статус |
+|---|---|---|---|---|
+| Warsmash (веб-порт: `app.js`, `engine-worker.js`, `worker.js`, сайт-оболочка Astro) | коммит `d69e772b4dede6fd3569f9949a3180cdfea4635b` ветки `HTML` + наши патчи `vendor-patches/wc3/*.patch` | https://github.com/ErikSom/WarsmashModEngine (форк https://github.com/Retera/WarsmashModEngine) | **GNU AGPL-3.0** | сверено: `LICENSE` на коммите. Исходник точной версии: https://github.com/ErikSom/WarsmashModEngine/tree/d69e772b4dede6fd3569f9949a3180cdfea4635b, наши изменения — `vendor-patches/wc3/` в этом репозитории |
+| Код, перенесённый внутрь Warsmash: порт mdx-m3-viewer, рендер ландшафта HiveWE, улучшения wc3data, MPQ- и BLP-парсеры DrSuperGood, парсеры PitzerMike, TGA OgerLord | по Warsmash | см. раздел «Background and History» в README Warsmash | у каждого свои (README Warsmash отсылает к их исходникам) | лицензии сверить с LICENSE в репозиториях upstream |
+| libGDX | `1.14.0` (по `build.gradle` Warsmash) | https://github.com/libgdx/libgdx | Apache-2.0 | лицензию сверить с LICENSE в репозитории upstream |
+| gdx-teavm (`backend-web`) | `1.5.4` | https://github.com/xpenatan/gdx-teavm | Apache-2.0 | сверено: `LICENSE` в репозитории |
+| TeaVM (рантайм и classlib в JS) | по зависимостям gdx-teavm `1.5.4` | https://github.com/konsoletyper/teavm | Apache-2.0 | лицензию сверить с LICENSE в репозитории upstream |
+| Java-зависимости ядра: Guava, Apache Commons Compress, Gson, ANTLR 4 runtime, blp-iio-plugin (`net.nikr:dds` наш патч 0002 из сборки убирает) | по `build.gradle` Warsmash | Maven Central, `jars/` в Warsmash | Guava, Commons Compress, Gson — Apache-2.0; ANTLR — BSD-3-Clause; остальные — сверить | по общеизвестным данным; полный список — `./gradlew :html:dependencies` |
+| mdx-m3-viewer | `^5.12.0` (`html/web-src/package.json`) | https://github.com/flowtsohg/mdx-m3-viewer | MIT | сверено: `LICENSE` (Copyright (c) 2013-2021 Chananya Freiman) |
+| `@poki/netlib` — WebRTC P2P, лобби | `0.0.18` | https://github.com/poki/netlib | ISC | сверено: `LICENSE` и `package.json` на теге `v0.0.18` |
+| Astro, `@astrojs/preact`, Preact | Astro `^5`, Preact `^10.24` | https://github.com/withastro/astro, https://github.com/preactjs/preact | MIT | лицензию сверить с LICENSE в репозиториях upstream; точные версии — `html/web-src/package-lock.json` на коммите |
+| jpeg-js | копия в `webapp-src/scripts/jpeg-js.js` | https://github.com/jpeg-js/jpeg-js | Apache-2.0 | сверено: заголовок файла |
+
+**Не раздаётся сайтом:** заставка upstream `goblin-tinker.webp` (рендер модели из Warcraft III — арт Blizzard) и фон `bg.png` (происхождение не сверено) — `build-wc3.sh` удаляет их из сборки, патч `0001` их больше не использует.
+
 ## 2. Компоненты, которые работают на сервере
 
 Образы скачивает администратор с Docker Hub на свою VPS. Репозиторий их не содержит и не распространяет.
@@ -42,6 +61,8 @@
 | coturn — STUN/TURN | `4.6.3-alpine` → digest | https://github.com/coturn/coturn | BSD-3-Clause | лицензию сверить с LICENSE в репозитории upstream |
 | Node.js — API (`api/`) и сборка сайта | `22` (`node:22-alpine`) → digest | https://github.com/nodejs/node | MIT (плюс лицензии встроенных библиотек, файл LICENSE в дистрибутиве Node) | лицензию сверить с LICENSE в репозитории upstream |
 | Alpine Linux — базовый слой образов `caddy`, `coturn`, `node` | по образам | https://alpinelinux.org | разные (пакеты дистрибутива) | — |
+| `poki/netlib` — сервер сигналинга Warcraft III (необязательный, `docker-compose.wc3-signaling.yml`) | `v0.0.18` (коммит `e28f5d6`), образ собирается на VPS из git | https://github.com/poki/netlib (`cmd/signaling`) | ISC | сверено: `LICENSE` на теге |
+| PostgreSQL — база сигналинга (там же) | `16-alpine` | https://www.postgresql.org | PostgreSQL License | лицензию сверить с LICENSE в репозитории upstream |
 | `steamcmd/steamcmd` — только для необязательного `scripts/install-server-files.sh` | `latest` | https://hub.docker.com/r/steamcmd/steamcmd | образ — лицензию сверить с LICENSE в репозитории upstream; сам SteamCMD — проприетарный (Valve) | используется только по желанию администратора |
 
 Если вы публикуете собранный образ `web` (Caddy + статика) в реестр, вы распространяете Caddy (Apache-2.0) и всё из §1. Тогда к образу нужно приложить этот файл и тексты лицензий. Пока образы собираются только на своей VPS, они не распространяются.
@@ -90,6 +111,8 @@
 
 Не связан с Valve. Counter-Strike — товарный знак Valve Corporation.
 
+Не связан с Blizzard Entertainment. Warcraft — товарный знак Blizzard Entertainment, Inc. Warcraft III и все его файлы (архивы `.mpq`, модели, текстуры, звуки, карты) — собственность Blizzard; сайт их не хранит и не раздаёт: игрок выбирает свою копию, файлы лежат в хранилище его браузера (OPFS) и никуда не отправляются. DotA Allstars — пользовательская карта, права у её авторов; сайт её не раздаёт.
+
 Half-Life, Counter-Strike, Steam и связанные с ними названия и логотипы — товарные знаки Valve Corporation. Сайт не связан с Valve, Valve его не одобряла и не поддерживает. Сайт не хранит и не раздаёт файлы игры (`valve/`, `cstrike/`: карты, модели, звуки, текстуры). Каждый игрок использует свою копию из Steam: файлы читаются только в его браузере и никуда не отправляются. Файлы на сервере ставит администратор из своей копии.
 
 ## 7. Тексты лицензий
@@ -98,6 +121,8 @@ Half-Life, Counter-Strike, Steam и связанные с ними назван�
 
 - MIT — https://opensource.org/license/mit (для `xash3d-fwgs`, `cs16-client`, JSZip, pako, Vite, Pion, Node.js и образа `cs-web-server` — со строками copyright из их файлов LICENSE);
 - GPL-3.0 — https://www.gnu.org/licenses/gpl-3.0.txt;
+- AGPL-3.0 (Warsmash) — https://www.gnu.org/licenses/agpl-3.0.txt, копия в сборке: `games/wc3/LICENSE-Warsmash.txt`;
+- ISC (`@poki/netlib`) — https://opensource.org/license/isc-license-txt;
 - Apache-2.0 — https://www.apache.org/licenses/LICENSE-2.0.txt;
 - BSD-3-Clause — https://opensource.org/license/bsd-3-clause;
 - zlib — https://zlib.net/zlib_license.html;

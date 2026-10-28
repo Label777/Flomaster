@@ -39,6 +39,7 @@ export function renderShell(root: HTMLElement, route: string, content: Child[]):
     'footer',
     { class: 'site-footer' },
     h('p', { class: 'legal', text: LEGAL_FOOTER }),
+    h('p', { class: 'legal', text: 'Не связан с Blizzard Entertainment. Warcraft — товарный знак Blizzard Entertainment, Inc.' }),
     h('p', { class: 'legal', text: 'Все товарные знаки принадлежат их владельцам. Сайт не хранит и не раздаёт файлы коммерческих игр.' }),
     h('p', null, h('a', { attrs: { href: '#/licenses' }, text: 'Лицензии' })),
   );

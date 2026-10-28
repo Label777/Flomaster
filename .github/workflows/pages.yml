@@ -4,6 +4,8 @@
 # Без игрового сервера сайт работает в офлайн-режиме. Чтобы подключить серверы на VPS,
 # задайте переменную репозитория API_BASE (Settings → Secrets and variables → Actions →
 # Variables), например https://cs.example.com, а на VPS в .env — ALLOWED_ORIGINS=https://<владелец>.github.io
+# Warcraft III собирается здесь же (Warsmash, JDK 17). Свой сигналинг для его сетевой игры —
+# переменная WC3_SIGNALING (wss://…/wc3-signaling/v0/signaling), иначе сервер Poki.
 name: pages
 
 on:
@@ -30,7 +32,13 @@ jobs:
         with:
           node-version: 22
 
-      - name: "Проверка: в репозитории нет файлов Valve"
+      # Warcraft III (Warsmash) собирается TeaVM на JDK 17
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: "Проверка: в репозитории нет файлов игр"
         run: bash scripts/check-no-valve-files.sh
 
       - name: Клиент cs16-client (снят с npm — файлы с jsDelivr, хеши сверяются)
@@ -38,6 +46,48 @@ jobs:
         run: |
           set -o pipefail
           node scripts/fetch-cs16-client.mjs 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+
+      # Готовая сборка Warsmash переиспользуется, пока не менялись скрипт, патчи, путь и сигналинг:
+      # меньше времени и меньше зависимости от сторонних Maven-репозиториев (KNOWN_ISSUES №61)
+      - name: Warcraft III — кэш готовой сборки
+        id: wc3cache
+        uses: actions/cache@v4
+        with:
+          path: web/public/games/wc3
+          key: wc3-dist-${{ hashFiles('scripts/build-wc3.sh', 'scripts/lib.sh', 'vendor-patches/wc3/**', 'web/scripts/fetch-wc3.mjs') }}-${{ github.event.repository.name }}-${{ vars.WC3_SIGNALING }}
+
+      - name: Warcraft III — кэш Gradle
+        if: steps.wc3cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: wc3-gradle-${{ hashFiles('scripts/build-wc3.sh') }}
+          restore-keys: wc3-gradle-
+
+      # Если Warsmash не собрался (обычно — недоступен Maven-репозиторий его зависимостей),
+      # сайт всё равно публикуется: CS 1.6 и остальные игры работают, у Warcraft III будет 404.
+      - name: Warcraft III — сборка Warsmash (web/public/games/wc3)
+        id: wc3
+        if: steps.wc3cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        working-directory: web
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+          # Свой сервер сигналинга (docker-compose.wc3-signaling.yml); пусто — сервер Poki
+          VITE_WC3_SIGNALING: ${{ vars.WC3_SIGNALING }}
+          WC3_LOG: ${{ runner.temp }}/wc3-build.log
+        run: |
+          set -o pipefail
+          node scripts/fetch-wc3.mjs 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+
+      - name: Warcraft III не собран → предупреждение
+        if: steps.wc3.outcome == 'failure'
+        run: |
+          f="$RUNNER_TEMP/wc3-build.log"
+          body=$( { [ -s "$f" ] && grep -vE '^[[:space:]]*$' "$f" | tail -n 30; } | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"}{print}')
+          echo "::warning title=Warcraft III не собран — сайт опубликован без него, перезапустите workflow позже::${body}"
 
       - name: Установка зависимостей
         working-directory: web

@@ -119,7 +119,8 @@ function renderPlayer(root: HTMLElement, game: GameEntry): (() => void) | void {
     navigate(`#/g/${encodeURIComponent(game.id)}`);
     return;
   }
-  const src = /^https?:\/\//i.test(game.launch.src) ? game.launch.src : assetUrl(game.launch.src);
+  const external = /^https?:\/\//i.test(game.launch.src);
+  const src = external ? game.launch.src : assetUrl(game.launch.src);
   markPlayed(game.id);
 
   // Новый <iframe> вместо смены src: смена src добавляет записи в историю, и «Назад» застревает в плеере.
@@ -132,7 +133,9 @@ function renderPlayer(root: HTMLElement, game: GameEntry): (() => void) | void {
         allow: 'fullscreen; pointer-lock; gamepad; autoplay',
         allowfullscreen: true,
         // Сайт cross-origin isolated (COEP): чужой фрейм без своих заголовков грузится в режиме credentialless.
-        credentialless: true,
+        // Своим играм он вредит: у credentialless-фрейма временное хранилище, и Warcraft III
+        // терял бы файлы игры в OPFS после перезагрузки. Свои файлы и так приходят с нашими COEP.
+        credentialless: external ? true : null,
         referrerpolicy: 'no-referrer',
       },
     });

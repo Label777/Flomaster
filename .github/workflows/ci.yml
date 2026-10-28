@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   guard:
-    name: Нет файлов Valve
+    name: Нет файлов игр
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,6 +66,8 @@ jobs:
       - run: cp .env.example .env
       - run: docker compose config -q
       - run: docker compose -f docker-compose.yml -f docker-compose.steamcmd.yml config -q
+      - name: docker compose config (сигналинг Warcraft III)
+        run: WC3_SIGNALING_DB_PASSWORD=ci docker compose -f docker-compose.yml -f docker-compose.wc3-signaling.yml config -q
       - name: Рендер шаблонов (scripts/deploy.sh --render-only)
         run: |
           sed -i \
@@ -85,12 +87,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Образ web (Caddy + статика)
+      - name: Образ web (Caddy + статика + Warsmash)
         run: |
-          docker buildx build --platform linux/amd64 \
+          set -o pipefail
+          docker buildx build --platform linux/amd64 --progress=plain \
             --build-arg NODE_IMAGE=node:22-alpine \
             --build-arg CADDY_IMAGE=caddy:2.11-alpine \
-            -f web/Dockerfile -t cs16-web/web:ci .
+            --build-arg WITH_WC3=1 \
+            -f web/Dockerfile -t cs16-web/web:ci . 2>&1 | tee "$RUNNER_TEMP/web-image.log"
+      # Хвост лога — в аннотацию (логи job'ов лежат во внешнем хранилище)
+      - name: Ошибка сборки образа web → аннотация
+        if: failure()
+        run: |
+          f="$RUNNER_TEMP/web-image.log"
+          [ -s "$f" ] || exit 0
+          body=$(grep -vE '^[[:space:]]*$' "$f" | tail -n 60 | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"}{print}')
+          echo "::error title=Последние строки сборки образа web::${body}"
       - name: Образ api
         run: |
           docker buildx build --platform linux/amd64 \

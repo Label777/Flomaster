@@ -1,0 +1,115 @@
+# Warcraft III (KNOWN_ISSUES.md, раздел G): проверочная сборка веб-порта Warsmash с нашими патчами.
+#
+# Сайт собирает Warsmash сам (pages.yml, web/Dockerfile); этот workflow — быстрая проверка
+# скрипта и патчей и артефакт для ручных тестов (TEST_PLAN.md, раздел 5): скачать wc3-warsmash,
+# распаковать, `python3 -m http.server 8000` в его каталоге, открыть http://127.0.0.1:8000/games/wc3/.
+#
+# Запуск вручную: Actions → wc3-engine → Run workflow. Сам запускается при изменении скрипта сборки и патчей.
+name: wc3-engine
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/build-wc3.sh
+      - web/scripts/fetch-wc3.mjs
+      - web/scripts/smoke-wc3.mjs
+      - vendor-patches/wc3/**
+      - .github/workflows/wc3-engine.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wc3-engine-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Warsmash — сборка на закреплённом коммите
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # Gradle 7.3.3 из wrapper Warsmash на JDK 21 не запускается
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: wc3-gradle-${{ hashFiles('scripts/build-wc3.sh') }}
+          restore-keys: wc3-gradle-
+
+      - name: Сборка (scripts/build-wc3.sh)
+        run: |
+          set -o pipefail
+          WC3_LOG="$RUNNER_TEMP/wc3-build.log" WC3_BASE=/games/wc3/ scripts/build-wc3.sh "$RUNNER_TEMP/site/games/wc3" 2>&1 | tee "$RUNNER_TEMP/wc3-script.log"
+
+      # Сводка — в аннотацию и в Summary: видно на странице запуска без скачивания артефакта
+      - name: Что собралось
+        run: |
+          out="$RUNNER_TEMP/site/games/wc3"
+          {
+            cat "$out/BUILD-INFO.txt"
+            echo
+            echo "Скрипт сборки:"
+            grep -E '==>|✓|ВНИМАНИЕ|ОШИБКА' "$RUNNER_TEMP/wc3-script.log" | sed 's/^/  /'
+            echo
+            echo "Размер: $(du -sh "$out" | cut -f1), файлов: $(find "$out" -type f | wc -l)"
+            echo "Файлы больше 256 КБ:"
+            (cd "$out" && find . -type f -size +256k -printf '%s %P\n' | sort -k2 | awk '{printf "  %.1f МБ  %s\n", $1/1048576, $2}')
+            echo "Страницы: $(cd "$out" && find . -name index.html -printf '%P ' | sort)"
+          } > "$RUNNER_TEMP/wc3-summary.txt"
+          cat "$RUNNER_TEMP/wc3-summary.txt"
+          { echo '```'; cat "$RUNNER_TEMP/wc3-summary.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          body=$(sed -e 's/%/%25/g' -e 's/\r//g' "$RUNNER_TEMP/wc3-summary.txt" | awk 'BEGIN{ORS="%0A"}{print}')
+          echo "::notice title=Сборка Warsmash::${body}"
+
+      # Без файлов игры: страницы по пути /games/wc3/ под COOP/COEP, запуск движка в воркере
+      - name: Дымовой тест в Chromium (web/scripts/smoke-wc3.mjs)
+        run: |
+          set -o pipefail
+          npm install --prefix "$RUNNER_TEMP/pw" --no-audit --no-fund playwright@1 > /dev/null
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium > /dev/null
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/pw/node_modules/playwright" \
+            node web/scripts/smoke-wc3.mjs "$RUNNER_TEMP/site" /games/wc3/ 2>&1 | tee "$RUNNER_TEMP/wc3-smoke.log"
+          body=$(tail -n 40 "$RUNNER_TEMP/wc3-smoke.log" | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"}{print}')
+          echo "::notice title=Дымовой тест::${body}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wc3-warsmash
+          path: ${{ runner.temp }}/site
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wc3-build-log
+          path: |
+            ${{ runner.temp }}/wc3-build.log
+            ${{ runner.temp }}/wc3-script.log
+            ${{ runner.temp }}/wc3-smoke.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Хвост лога — в аннотацию: её видно на странице запуска без скачивания логов
+      - name: Ошибка сборки → аннотация
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP/wc3-smoke.log" "$RUNNER_TEMP/wc3-build.log" "$RUNNER_TEMP/wc3-script.log"; do
+            [ -s "$f" ] || continue
+            body=$(grep -vE '^[[:space:]]*$' "$f" | tail -n 40 | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"}{print}')
+            echo "::error title=Последние строки ${f##*/}::${body}"
+          done

@@ -31,6 +31,17 @@ export function renderLicenses(root: HTMLElement, route: Route): () => void {
       h('h1', { text: 'Лицензии' }),
       h('p', { text: 'Сайт и его код распространяются под лицензией MIT. Движок Xash3D FWGS и клиент cs16-client — сторонние проекты со своими лицензиями, их тексты ниже.' }),
       h('p', { text: 'Файлы игры (valve, cstrike) принадлежат Valve Corporation, на сайте их нет — каждый игрок использует свою копию.' }),
+      h(
+        'p',
+        null,
+        'Warcraft III запускает движок Warsmash (GNU AGPL-3.0). Его исходники точной версии — ',
+        h('a', { attrs: { href: 'https://github.com/ErikSom/WarsmashModEngine/tree/d69e772b4dede6fd3569f9949a3180cdfea4635b', target: '_blank', rel: 'noopener noreferrer' }, text: 'на GitHub' }),
+        ', наши изменения — каталог vendor-patches/wc3 в репозитории сайта, текст лицензии — ',
+        h('a', { attrs: { href: assetUrl('games/wc3/LICENSE-Warsmash.txt'), target: '_blank', rel: 'noopener' }, text: 'LICENSE-Warsmash.txt' }),
+        ', состав сборки — ',
+        h('a', { attrs: { href: assetUrl('games/wc3/BUILD-INFO.txt'), target: '_blank', rel: 'noopener' }, text: 'BUILD-INFO.txt' }),
+        '. Файлы Warcraft III принадлежат Blizzard Entertainment, на сайте их нет.',
+      ),
       ...sections,
     ),
   ]);
