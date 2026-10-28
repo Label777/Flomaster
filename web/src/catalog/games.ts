@@ -61,6 +61,15 @@ const GLYPH_TARGET = `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="fal
   <circle cx="32" cy="32" r="6" fill="currentColor"/>
 </svg>`;
 
+/** Знак-крепость для Warcraft III (оригинальный: башня с зубцами и флажком). */
+const GLYPH_KEEP = `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+  <path d="M14 58V26h6v-6h6v6h12v-6h6v6h6v32z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="miter"/>
+  <path d="M28 58V46a4 4 0 0 1 8 0v12" fill="none" stroke="currentColor" stroke-width="3"/>
+  <path d="M32 26V6l10 4-10 4" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="19" y="32" width="5" height="7" fill="currentColor"/>
+  <rect x="40" y="32" width="5" height="7" fill="currentColor"/>
+</svg>`;
+
 export const GAMES: readonly GameEntry[] = [
   {
     id: 'cs16',
@@ -83,6 +92,27 @@ export const GAMES: readonly GameEntry[] = [
       { label: 'Как подготовить файлы игры', href: '#/guide' },
     ],
     legal: 'Не связан с Valve. Counter-Strike — товарный знак Valve Corporation. Файлы игры сайт не хранит и не раздаёт.',
+  },
+  {
+    id: 'wc3',
+    title: 'Warcraft III: The Frozen Throne',
+    tagline: 'Классическая стратегия в браузере — по сети с друзьями (бета)',
+    description: [
+      'Открытый движок Warsmash — реимплементация движка Warcraft III, собранная в JavaScript, — запускает игру прямо во вкладке.',
+      'Нужна своя классическая копия Warcraft III: The Frozen Throne (патч 1.22–1.28). Вы выбираете её папку, браузер складывает архивы игры в своё хранилище на вашем компьютере и никуда их не отправляет. Reforged и версии 1.33+ не подойдут.',
+      'Сеть — напрямую между браузерами (WebRTC): лобби, слоты, вход по коду. Компьютерных противников в браузерной версии пока нет — играйте с друзьями.',
+      'DotA Allstars пока не работает: движку не хватает части механик карты — покупки героя в таверне, большинства способностей, воскрешения. Подробности — в инструкции.',
+    ],
+    genres: ['Стратегия', 'Мультиплеер', 'Классика'],
+    players: '1–12',
+    platform: 'desktop',
+    badges: ['Свои файлы игры', 'Онлайн P2P', 'Бета'],
+    status: 'ready',
+    launch: { kind: 'iframe', src: 'games/wc3/' },
+    cover: { from: '#2a3550', to: '#0d1018', glyph: GLYPH_KEEP },
+    links: [{ label: 'Как подготовить файлы', href: '#/wc3' }],
+    legal:
+      'Не связан с Blizzard Entertainment. Warcraft — товарный знак Blizzard Entertainment, Inc. DotA Allstars — пользовательская карта, права у её авторов. Файлы игры и карты сайт не хранит и не раздаёт.',
   },
   {
     id: 'reflex',

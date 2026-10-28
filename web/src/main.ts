@@ -6,6 +6,7 @@ import { renderPlay } from './pages/play';
 import { renderGame } from './pages/game';
 import { renderServers } from './pages/servers';
 import { renderGuide } from './pages/guide';
+import { renderWc3Guide } from './pages/wc3-guide';
 import { renderLicenses } from './pages/licenses';
 import { renderUnsupported } from './pages/unsupported';
 import { renderNotFound } from './pages/notfound';
@@ -22,6 +23,7 @@ const PAGES: Record<string, PageRender> = {
   game: renderGame,
   servers: renderServers,
   guide: renderGuide,
+  wc3: renderWc3Guide,
   licenses: renderLicenses,
   g: renderCatalogGame,
 };
@@ -31,6 +33,7 @@ const TITLES: Record<string, string> = {
   game: 'Counter-Strike 1.6',
   servers: 'Серверы',
   guide: 'Counter-Strike 1.6 — подготовка файлов',
+  wc3: 'Warcraft III — подготовка файлов',
   licenses: 'Лицензии',
 };
 
