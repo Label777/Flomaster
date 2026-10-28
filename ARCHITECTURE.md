@@ -200,6 +200,8 @@ TURN: coturn в режиме `use-auth-secret`. API выдаёт учётки п
 | Карточка, плеер, инструкция | `web/src/catalog/games.ts` (`wc3`), `web/src/pages/game-page.ts`, `web/src/pages/wc3-guide.ts` (`#/wc3`) |
 | Свой сигналинг | `docker-compose.wc3-signaling.yml`, маршрут `/wc3-signaling/*` в `deploy/caddy/Caddyfile`, `VITE_WC3_SIGNALING` |
 
+Наши патчи Warsmash (`vendor-patches/wc3/`, накладываются по порядку): `0001` — работа из подкаталога сайта, без арта Blizzard, свой сигналинг; `0002` — без ненадёжного `maven.nikr.net`; `0003` — механики для пользовательских карт вроде DotA: продажа героев в тавернах, чат (поле на странице → GUI-события lockstep → `TriggerRegisterPlayerChatEvent`), настоящий Channel, события заклинаний, `ReviveHero` и др. (KNOWN_ISSUES, п. 43–49, 62). Новый код в Warsmash — в отдельных файлах с префиксом `Flomaster` и в методах `flomaster*`, чтобы патч было проще переносить на новые коммиты upstream.
+
 Юридическая граница та же, что у CS 1.6: файлы игры и карты выбирает игрок, они лежат в OPFS его браузера и никуда не отправляются; сайт раздаёт только код движка. Лицензии: код сайта — MIT, Warsmash — AGPL-3.0 отдельной сборкой (наш TypeScript его не импортирует); ссылка на исходник точного коммита и наши патчи — на страницах `#/wc3` и `#/licenses` и в `games/wc3/BUILD-INFO.txt`.
 
 Изоляция: Warsmash не нужен `SharedArrayBuffer`, все его файлы с того же origin, поэтому COOP/COEP сайта (Caddy, `coi-sw.js` на Pages — его scope `BASE_URL` покрывает `games/wc3/`) ему не мешают. Фрейм своей игры грузится без `credentialless`, иначе у него было бы временное хранилище и OPFS терялся бы.
