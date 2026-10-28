@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Проверка: в репозитории нет файлов Valve
+      - name: "Проверка: в репозитории нет файлов Valve"
         run: bash scripts/check-no-valve-files.sh
 
       - name: Установка зависимостей
