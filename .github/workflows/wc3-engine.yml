@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Gradle 7.3.3 из wrapper Warsmash на JDK 21 не запускается
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -46,13 +46,25 @@ jobs:
           set -o pipefail
           WC3_LOG="$RUNNER_TEMP/wc3-build.log" scripts/build-wc3.sh "$RUNNER_TEMP/wc3" 2>&1 | tee "$RUNNER_TEMP/wc3-script.log"
 
+      # Сводка — в аннотацию и в Summary: видно на странице запуска без скачивания артефакта
       - name: Что собралось
         run: |
-          cat "$RUNNER_TEMP/wc3/BUILD-INFO.txt"
-          echo
-          du -sh "$RUNNER_TEMP/wc3"
-          echo "Крупные файлы:"
-          (cd "$RUNNER_TEMP/wc3" && find . -type f -size +512k -exec ls -lh {} + | awk '{print $5, $9}' | sort -k2)
+          out="$RUNNER_TEMP/wc3"
+          {
+            cat "$out/BUILD-INFO.txt"
+            echo
+            echo "Скрипт сборки:"
+            grep -E '==>|✓|ВНИМАНИЕ|ОШИБКА' "$RUNNER_TEMP/wc3-script.log" | sed 's/^/  /'
+            echo
+            echo "Размер: $(du -sh "$out" | cut -f1), файлов: $(find "$out" -type f | wc -l)"
+            echo "Файлы больше 256 КБ:"
+            (cd "$out" && find . -type f -size +256k -printf '%s %P\n' | sort -k2 | awk '{printf "  %.1f МБ  %s\n", $1/1048576, $2}')
+            echo "Страницы: $(cd "$out" && find . -name index.html -printf '%P ' | sort)"
+          } > "$RUNNER_TEMP/wc3-summary.txt"
+          cat "$RUNNER_TEMP/wc3-summary.txt"
+          { echo '```'; cat "$RUNNER_TEMP/wc3-summary.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          body=$(sed -e 's/%/%25/g' -e 's/\r//g' "$RUNNER_TEMP/wc3-summary.txt" | awk 'BEGIN{ORS="%0A"}{print}')
+          echo "::notice title=Сборка Warsmash::${body}"
 
       - uses: actions/upload-artifact@v4
         with:

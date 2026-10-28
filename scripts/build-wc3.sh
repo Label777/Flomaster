@@ -175,9 +175,11 @@ done
 ((${#missing[@]} == 0)) || fail_with_log "в сборке нет файлов: ${missing[*]}"
 
 # --- 4–5. Чистка и проверка результата ----------------------------------------
+stripped=()
 for name in "${STRIP_FILES[@]}"; do
   while IFS= read -r -d '' f; do
     rm -f "$f"
+    stripped+=("${f#"$dist"/}")
     log_warn "удалён ${f#"$dist"/}: это рендер модели из Warcraft III (арт Blizzard), сайт его не раздаёт"
   done < <(find "$dist" -type f -iname "$name" -print0)
 done
@@ -219,7 +221,11 @@ sha256_of() {
   else
     echo "Патчей нет: сборка соответствует коммиту upstream."
   fi
-  echo "Удалено из сборки: ${STRIP_FILES[*]} (арт Blizzard)."
+  if ((${#stripped[@]} > 0)); then
+    echo "Удалено из сборки (арт Blizzard): ${stripped[*]}."
+  else
+    echo "Удалять из сборки ничего не пришлось (искали: ${STRIP_FILES[*]})."
+  fi
   echo "Собрано: $(date -u +%Y-%m-%dT%H:%M:%SZ), JDK $java_ver, Node $(node -v)"
   echo
   echo "Файлы игры Warcraft III в сборку не входят: игрок выбирает свою копию, файлы читаются только в его браузере."
