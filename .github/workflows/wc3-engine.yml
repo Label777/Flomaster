@@ -1,0 +1,82 @@
+# Warcraft III, фаза 0 (KNOWN_ISSUES.md, раздел G): сборка веб-порта Warsmash на закреплённом коммите.
+#
+# Зачем: в среде разработки нет доступа к Maven Central и npm, поэтому сборка проверяется здесь.
+# Результат — артефакт wc3-warsmash (7 дней) для ручной проверки по TEST_PLAN.md, раздел 5:
+# скачать, распаковать, `python3 -m http.server 8000` в его каталоге, открыть http://127.0.0.1:8000/.
+#
+# На сайт (pages.yml, образ web) эта сборка НЕ попадает: интеграция — фаза 1, после решения по движку.
+# Запуск вручную: Actions → wc3-engine → Run workflow. Сам запускается при изменении скрипта сборки и патчей.
+name: wc3-engine
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/build-wc3.sh
+      - vendor-patches/wc3/**
+      - .github/workflows/wc3-engine.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wc3-engine-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Warsmash — сборка на закреплённом коммите
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # Gradle 7.3.3 из wrapper Warsmash на JDK 21 не запускается
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Сборка (scripts/build-wc3.sh)
+        run: |
+          set -o pipefail
+          WC3_LOG="$RUNNER_TEMP/wc3-build.log" scripts/build-wc3.sh "$RUNNER_TEMP/wc3" 2>&1 | tee "$RUNNER_TEMP/wc3-script.log"
+
+      - name: Что собралось
+        run: |
+          cat "$RUNNER_TEMP/wc3/BUILD-INFO.txt"
+          echo
+          du -sh "$RUNNER_TEMP/wc3"
+          echo "Крупные файлы:"
+          (cd "$RUNNER_TEMP/wc3" && find . -type f -size +512k -exec ls -lh {} + | awk '{print $5, $9}' | sort -k2)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wc3-warsmash
+          path: ${{ runner.temp }}/wc3
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wc3-build-log
+          path: |
+            ${{ runner.temp }}/wc3-build.log
+            ${{ runner.temp }}/wc3-script.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Хвост лога — в аннотацию: её видно на странице запуска без скачивания логов
+      - name: Ошибка сборки → аннотация
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP/wc3-build.log" "$RUNNER_TEMP/wc3-script.log"; do
+            [ -s "$f" ] || continue
+            body=$(grep -vE '^[[:space:]]*$' "$f" | tail -n 40 | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"}{print}')
+            echo "::error title=Последние строки ${f##*/}::${body}"
+          done
