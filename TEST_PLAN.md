@@ -201,7 +201,7 @@
 | `images` | `docker buildx build` образов `web` (Caddy + статика, контекст — корень репозитория) и `api` | R-DEPLOY |
 | `shellcheck` | `shellcheck -x -P scripts scripts/*.sh` | R-DEPLOY |
 
-`.github/workflows/wc3-engine.yml` — проверочная сборка веб-порта Warsmash (Warcraft III) с нашими патчами: `scripts/build-wc3.sh` на JDK 17 и Node 22, артефакт `wc3-warsmash` на 7 дней в раскладке сайта (`games/wc3/`). Запускается вручную и при изменении скрипта или `vendor-patches/wc3/`. Сайт собирает Warsmash сам — в `pages.yml` и в образе `web` (задача `images` в CI это проверяет).
+`.github/workflows/wc3-engine.yml` — проверочная сборка веб-порта Warsmash (Warcraft III) с нашими патчами: `scripts/build-wc3.sh` на JDK 17 и Node 22, артефакт `wc3-warsmash` на 7 дней в раскладке сайта (`games/wc3/`). Запускается вручную и при изменении скрипта или `vendor-patches/wc3/`. После сборки — дымовой тест `web/scripts/smoke-wc3.mjs`: headless Chromium, заголовки как у Caddy, страницы `/games/wc3/`, запуск движка без файлов игры; падает на 404 от нашего origin, ошибках JS, отсутствии изоляции/OffscreenCanvas/OPFS или если движок не загрузил свои файлы из базы. Сайт собирает Warsmash сам — в `pages.yml` и в образе `web` (задача `images` в CI это проверяет).
 
 `.github/workflows/deploy.yml` — ручной деплой (workflow_dispatch) по SSH: `git pull --ff-only && scripts/deploy.sh [--pin]`. Не тест, но после него нужно пройти T-12 п. 5.
 
