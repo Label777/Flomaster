@@ -12,13 +12,13 @@
 - Приёмочные тесты: [TEST_PLAN.md](TEST_PLAN.md)
 - Как добавить игру в каталог: [docs/ADDING_GAMES.md](docs/ADDING_GAMES.md)
 
-Главная страница — каталог игр (поиск, фильтр по жанрам, карточки). Сейчас в нём Counter-Strike 1.6 и демо-игра «Реакция». Новая игра добавляется одной записью в `web/src/catalog/games.ts`. Название сайта в шапке задаётся при сборке переменной `VITE_SITE_NAME` (по умолчанию Flomaster).
+Главная страница — каталог игр (поиск, фильтр по жанрам, карточки). Сейчас в нём Counter-Strike 1.6, Warcraft III: The Frozen Throne (бета: движок [Warsmash](https://github.com/ErikSom/WarsmashModEngine), свои файлы игрока, сеть между браузерами; DotA пока не работает — [KNOWN_ISSUES, раздел G](KNOWN_ISSUES.md#g-warcraft-iii-the-frozen-throne-warsmash-и-dota)) и демо-игра «Реакция». Новая игра добавляется одной записью в `web/src/catalog/games.ts`. Название сайта в шапке задаётся при сборке переменной `VITE_SITE_NAME` (по умолчанию Flomaster).
 
 ## Перед запуском (обязательно)
 
 Среда, в которой писался код, не имела доступа к npm, GitHub и Docker Hub, поэтому три вещи надо сделать на машине с интернетом:
 
-1. `cd web && npm run fetch:cs16 && npm install && npm run build` — локальная сборка (пакет `cs16-client` снят с npm, первая команда скачивает его файлы с jsDelivr со сверкой хешей); закоммитьте появившийся `package-lock.json`. В GitHub Actions сборка уже проходит.
+1. `cd web && npm run fetch:cs16 && npm run fetch:wc3 && npm install && npm run build` — локальная сборка (пакет `cs16-client` снят с npm, первая команда скачивает его файлы с jsDelivr со сверкой хешей; вторая собирает Warcraft III — нужен JDK 17); закоммитьте появившийся `package-lock.json`. В GitHub Actions сборка уже проходит.
 2. `scripts/verify-upstream.sh` — сверить протокол WebRTC-сигналинга с upstream и при расхождении поправить `web/src/net/protocol.ts` и `CS_SIGNAL_PATH` (KNOWN_ISSUES №1).
 3. Пройти тесты T-01…T-18 из TEST_PLAN.md, прежде всего онлайн-игру двух игроков.
 
