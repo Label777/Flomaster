@@ -174,15 +174,28 @@ log_info "./gradlew :html:buildWeb (TeaVM, в GitHub Actions 2–9 минут; �
 chmod +x "$src/gradlew"
 log_info "путь на сайте: $WC3_BASE; сигналинг: ${WC3_SIGNALING:-сервер Poki по умолчанию}"
 # WARSMASH_BASE читает astro.config.mjs (патч 0001), PUBLIC_WC3_SIGNALING — poki-bridge.ts.
-if ! (cd "$src" && WARSMASH_BASE=$WC3_BASE PUBLIC_WC3_SIGNALING=$WC3_SIGNALING \
-  ./gradlew --no-daemon --console=plain :html:buildWeb) >>"$LOG" 2>&1; then
-  if grep -qiE 'Could not resolve|UnknownHostException|Connection refused|Could not GET|Could not HEAD|Unable to tunnel|403 Forbidden' "$LOG"; then
+# Сетевые сбои (чаще всего jitpack.io) повторяются: до трёх попыток с паузой.
+net_re='Could not resolve|UnknownHostException|Connection refused|Connection reset|Read timed out|Could not GET|Could not HEAD|Unable to tunnel|403 Forbidden|502 Bad Gateway|503 Service'
+attempt=1
+while :; do
+  mark=$(wc -l <"$LOG")
+  if (cd "$src" && WARSMASH_BASE=$WC3_BASE PUBLIC_WC3_SIGNALING=$WC3_SIGNALING \
+    ./gradlew --no-daemon --console=plain :html:buildWeb) >>"$LOG" 2>&1; then
+    break
+  fi
+  tail -n "+$((mark + 1))" "$LOG" >"$tmp/gradle-attempt.log"
+  if ! grep -qiE "$net_re" "$tmp/gradle-attempt.log"; then
+    fail_with_log "сборка Warsmash завершилась ошибкой"
+  fi
+  if ((attempt >= 3)); then
     log_error "Gradle не смог скачать зависимости или сам себя (нужен доступ к services.gradle.org, Maven Central, jitpack.io)"
-    grep -m5 -iE 'Could not resolve|UnknownHostException|Could not GET|Unable to tunnel|403 Forbidden' "$LOG" >&2 || true
+    grep -m5 -iE "$net_re" "$tmp/gradle-attempt.log" >&2 || true
     exit 2
   fi
-  fail_with_log "сборка Warsmash завершилась ошибкой"
-fi
+  log_warn "сетевая ошибка Gradle, попытка $((attempt + 1)) из 3 через $((attempt * 20)) с"
+  sleep $((attempt * 20))
+  attempt=$((attempt + 1))
+done
 
 dist=$src/html/build/dist/webapp
 [[ -d $dist ]] || fail_with_log "после сборки нет каталога html/build/dist/webapp"
