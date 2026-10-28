@@ -43,7 +43,7 @@
 | Что | Версия | Откуда известно | Статус |
 |---|---|---|---|
 | `xash3d-fwgs` (npm) | `1.2.2` (сборка `1.2.2+commit.7c58854`) | jsDelivr API (tag `latest`), `package.json` на unpkg | сверено |
-| `cs16-client` (npm) | `0.1.2` | DeepWiki | **[НЕ СВЕРЕНО]** — проверить `npm view cs16-client version`; пакеты WASM должны быть собраны одним Emscripten (4.0.17) |
+| `cs16-client` | `0.1.2` | jsDelivr (снят с npm) | `web/scripts/fetch-cs16-client.mjs` → `web/vendor/cs16-client`, хеши SHA-256 сверяются; совместимость с `xash3d-fwgs@1.2.2` **не проверена** (KNOWN_ISSUES №2) |
 | `jszip` | `3.10.1` | используется upstream-клиентом | сверено по описанию |
 | `vite` | `7.1.11` | версия из Dockerfile upstream (`client`-стадия) | сверено по описанию |
 | `typescript` | `5.9.3` | devDependency `xash3d-fwgs` | сверено |

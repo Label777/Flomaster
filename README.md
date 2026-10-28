@@ -18,7 +18,7 @@
 
 Среда, в которой писался код, не имела доступа к npm, GitHub и Docker Hub, поэтому три вещи надо сделать на машине с интернетом:
 
-1. `cd web && npm install && npm run build` — первая реальная сборка; закоммитьте появившийся `package-lock.json`.
+1. `cd web && npm run fetch:cs16 && npm install && npm run build` — локальная сборка (пакет `cs16-client` снят с npm, первая команда скачивает его файлы с jsDelivr со сверкой хешей); закоммитьте появившийся `package-lock.json`. В GitHub Actions сборка уже проходит.
 2. `scripts/verify-upstream.sh` — сверить протокол WebRTC-сигналинга с upstream и при расхождении поправить `web/src/net/protocol.ts` и `CS_SIGNAL_PATH` (KNOWN_ISSUES №1).
 3. Пройти тесты T-01…T-18 из TEST_PLAN.md, прежде всего онлайн-игру двух игроков.
 
@@ -100,7 +100,7 @@ docker compose -f docker-compose.yml -f docker-compose.steamcmd.yml up -d
 ## Разработка
 
 ```bash
-cd web && npm install && npm run dev      # http://localhost:5173
+cd web && npm run fetch:cs16 && npm install && npm run dev   # http://localhost:5173
 cd api && npm start                       # http://localhost:8080
 ```
 

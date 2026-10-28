@@ -36,9 +36,13 @@ KEEP=1 scripts/verify-upstream.sh                 # не удалять клон
 
 Обход на время расследования: временно опубликовать `27016:27016` в `docker-compose.yml`, открыть `http://<IP>:27016` (upstream-клиент образа) и посмотреть его трафик в DevTools → Network → WS. **Только для проверки**: `valve.zip` не монтировать и порт после проверки закрыть.
 
-### 2. [НЕ СВЕРЕНО] Версия `cs16-client` и совместимость wasm
+### 2. `cs16-client` снят с npm; [НЕ СВЕРЕНО] совместимость wasm
 
-`cs16-client@0.1.2` взят из DeepWiki: npm из среды разработки был недоступен. Все wasm-модули (`xash3d-fwgs` и `cs16-client`) должны быть собраны одним Emscripten (4.0.17), иначе возможен `LinkError` при загрузке. **Обход:** `npm view cs16-client versions` и `npm view xash3d-fwgs@1.2.2`, выбрать версию `cs16-client`, выпущенную вместе с `xash3d-fwgs@1.2.2`, и закрепить её в `web/package.json`. Проверка — тест T-02 в TEST_PLAN.
+Все версии `cs16-client` (последняя — `0.1.2` от 2025-10-22) удалены из реестра npm 2026-09-08, поэтому `npm install cs16-client` не работает. Файлы `0.1.2` по-прежнему раздаёт jsDelivr. `web/scripts/fetch-cs16-client.mjs` скачивает оттуда четыре нужных файла, сверяет SHA-256 с хешами jsDelivr и собирает локальный пакет `web/vendor/cs16-client` (в git не попадает); в `web/package.json` зависимость — `file:vendor/cs16-client`. Скрипт запускается **до** `npm install`: в CI, в `pages.yml` и в `web/Dockerfile` это уже сделано, локально — `cd web && npm run fetch:cs16 && npm install`. Если jsDelivr тоже уберёт файлы, нужен другой источник (`CS16_CLIENT_BASE=<зеркало>`) или сборка из исходников upstream.
+
+`xash3d-fwgs` помечен в npm как deprecated («will be removed»), но `1.2.2` пока устанавливается. Если его тоже удалят, понадобится такая же локальная копия.
+
+Совместимость не проверена: `cs16-client@0.1.2` опубликован в один день с `xash3d-fwgs@1.2.1` (2025-10-22), а сайт использует `xash3d-fwgs@1.2.2` (2026-01-19). Если при загрузке движка будет `LinkError`, попробуйте `xash3d-fwgs@1.2.1`. Проверка — тест T-02 в TEST_PLAN.
 
 ### 3. [НЕ СВЕРЕНО] Отвечает ли образ на A2S / Xash3D `info`
 
@@ -104,7 +108,7 @@ KEEP=1 scripts/verify-upstream.sh                 # не удалять клон
 | # | Ограничение | Обход |
 |---|---|---|
 | 33 | **Нет `package-lock.json`** в `web/`: среда разработки не имела доступа к npm. Прямые зависимости закреплены точно (`web/.npmrc`: `save-exact=true`), транзитивные — нет | первый `cd web && npm install` с сетью, закоммитить `web/package-lock.json`. После этого CI и `web/Dockerfile` сами переключатся на `npm ci` |
-| 34 | **Сборка `web` в этой среде не выполнялась** (нет `node_modules`). Типы проверены по заглушкам, повторяющим `.d.ts` `xash3d-fwgs@1.2.2`; `postbuild.mjs` проверен на имитации `dist/`. Пути экспорта `cs16-client` (`cl_dlls/…`, `dlls/cs_emscripten_wasm32.wasm`, `extras.pk3`) не проверены на настоящем пакете | первый `npm run build` в CI покажет, разрешаются ли импорты `?url` (`web/src/game/engine.ts:8-15`) |
+| 34 | **Сборка `web` проверена только в GitHub Actions** (в среде разработки нет доступа к npm). `npm install`, `tsc` и `vite build` проходят в CI и в `pages.yml`; `package-lock.json` пока не закоммичен | на машине с npm: `cd web && npm run fetch:cs16 && npm install` и закоммитить `package-lock.json` |
 | 35 | **GPL-исходники движка.** Сайт раздаёт wasm движка Xash3D FWGS (GPL-3.0-or-later по вторичным источникам) | до запуска выполнить чек-лист §4 в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): точные коммиты и своя копия исходников |
 | 36 | **Лицензия Half-Life SDK запрещает коммерческое использование** кода, производного от SDK (`cs16-client`, части движка) | сайт и доступ к серверу — только бесплатно (THIRD_PARTY_NOTICES §5) |
 | 37 | **GitHub Pages: только статика.** Игровой сервер, API и TURN на GitHub не запускаются | на Pages — офлайн-игра; для онлайна — VPS, переменная репозитория `API_BASE` и `ALLOWED_ORIGINS` на VPS (README, «Сайт на GitHub Pages») |
