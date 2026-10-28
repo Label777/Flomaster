@@ -38,6 +38,7 @@ _dotenv_unescape_dq() {
   local s=$1 out='' c i
   for ((i = 0; i < ${#s}; i++)); do
     c=${s:i:1}
+    # shellcheck disable=SC1003  # сравнение с одиночным обратным слешем
     if [[ $c == '\' && $((i + 1)) -lt ${#s} ]]; then
       i=$((i + 1))
       c=${s:i:1}
@@ -180,6 +181,7 @@ render_template() {
       die "$name: значение не должно содержать перевод строки"
     fi
   done
+  # shellcheck disable=SC2016  # '${' — буквальная подстрока шаблона, раскрывать не нужно
   while IFS= read -r line || [[ -n $line ]]; do
     n=$((n + 1))
     rest=$line

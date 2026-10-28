@@ -22,6 +22,7 @@ command -v git >/dev/null 2>&1 || {
 }
 
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/webxash3d-verify.XXXXXX")
+# shellcheck disable=SC2317  # вызывается через trap
 cleanup() {
   if [[ -n ${KEEP:-} ]]; then
     log_info "клон сохранён: $tmp/repo"
