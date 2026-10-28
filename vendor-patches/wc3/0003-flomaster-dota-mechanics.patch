@@ -1164,7 +1164,7 @@ index 00000000..81ddbcd5
 +	}
 +}
 diff --git a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/MeleeUI.java b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/MeleeUI.java
-index cdeca033..a15c8498 100644
+index cdeca033..2ae5357c 100644
 --- a/core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/MeleeUI.java
 +++ b/core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/MeleeUI.java
 @@ -442,6 +442,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
@@ -1175,10 +1175,10 @@ index cdeca033..a15c8498 100644
  
  		this.cameraManager = new GameCameraManager(cameraPresets, cameraRates);
  
-@@ -5149,6 +5150,27 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
+@@ -5148,6 +5149,27 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
+ 		return new CTimerDialog(timer, timerDialog, valueFrame, titleFrame);
  	}
  
- 	@Override
 +	/** Flomaster: текущий интерфейс игры — сюда веб-оболочка передаёт сообщения чата. */
 +	public static volatile MeleeUI flomasterActive;
 +
@@ -1200,9 +1200,9 @@ index cdeca033..a15c8498 100644
 +		displayTimedText(0, 0, 8, this.localPlayer.getName() + ": " + text);
 +	}
 +
+ 	@Override
  	public void displayTimedText(final float x, final float y, final float duration, final String message) {
  		showGameMessage(message, duration); // TODO x y
- 	}
 diff --git a/html/src/com/etheller/warsmash/html/engineworker/EngineWorkerMain.java b/html/src/com/etheller/warsmash/html/engineworker/EngineWorkerMain.java
 index 7e8602c2..eb675dc2 100644
 --- a/html/src/com/etheller/warsmash/html/engineworker/EngineWorkerMain.java
