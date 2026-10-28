@@ -103,4 +103,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: shellcheck --version
-      - run: shellcheck -x -P scripts scripts/*.sh
+      - name: shellcheck scripts/*.sh
+        run: |
+          # -f gcc → по строке на замечание; каждое выводится аннотацией на странице запуска
+          if ! shellcheck -x -P scripts -f gcc scripts/*.sh > shellcheck.txt; then
+            sed 's/^/::error::/' shellcheck.txt
+            exit 1
+          fi
