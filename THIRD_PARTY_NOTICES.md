@@ -37,7 +37,7 @@
 | libGDX | `1.14.0` (по `build.gradle` Warsmash) | https://github.com/libgdx/libgdx | Apache-2.0 | лицензию сверить с LICENSE в репозитории upstream |
 | gdx-teavm (`backend-web`) | `1.5.4` | https://github.com/xpenatan/gdx-teavm | Apache-2.0 | сверено: `LICENSE` в репозитории |
 | TeaVM (рантайм и classlib в JS) | по зависимостям gdx-teavm `1.5.4` | https://github.com/konsoletyper/teavm | Apache-2.0 | лицензию сверить с LICENSE в репозитории upstream |
-| Java-зависимости ядра: Guava, Apache Commons Compress, Gson, ANTLR 4 runtime, `net.nikr:dds`, blp-iio-plugin | по `build.gradle` Warsmash | Maven Central, `jars/` в Warsmash | Guava, Commons Compress, Gson — Apache-2.0; ANTLR — BSD-3-Clause; остальные — сверить | по общеизвестным данным; полный список — `./gradlew :html:dependencies` |
+| Java-зависимости ядра: Guava, Apache Commons Compress, Gson, ANTLR 4 runtime, blp-iio-plugin (`net.nikr:dds` наш патч 0002 из сборки убирает) | по `build.gradle` Warsmash | Maven Central, `jars/` в Warsmash | Guava, Commons Compress, Gson — Apache-2.0; ANTLR — BSD-3-Clause; остальные — сверить | по общеизвестным данным; полный список — `./gradlew :html:dependencies` |
 | mdx-m3-viewer | `^5.12.0` (`html/web-src/package.json`) | https://github.com/flowtsohg/mdx-m3-viewer | MIT | сверено: `LICENSE` (Copyright (c) 2013-2021 Chananya Freiman) |
 | `@poki/netlib` — WebRTC P2P, лобби | `0.0.18` | https://github.com/poki/netlib | ISC | сверено: `LICENSE` и `package.json` на теге `v0.0.18` |
 | Astro, `@astrojs/preact`, Preact | Astro `^5`, Preact `^10.24` | https://github.com/withastro/astro, https://github.com/preactjs/preact | MIT | лицензию сверить с LICENSE в репозиториях upstream; точные версии — `html/web-src/package-lock.json` на коммите |
